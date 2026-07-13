@@ -54,6 +54,34 @@
             border: 4px solid rgba(255,255,255,0.1);
         }
 
+        /* Lock the desktop layout: left choice | question | right choice */
+        #gameBoard {
+            grid-template-areas: "left-choice question right-choice";
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr) minmax(0, 1fr);
+        }
+        #leftZone {
+            grid-area: left-choice;
+            order: initial !important;
+        }
+        #centerZone {
+            grid-area: question;
+            order: initial !important;
+        }
+        #rightZone {
+            grid-area: right-choice;
+            order: initial !important;
+        }
+
+        @media (max-width: 767px) {
+            #gameBoard {
+                grid-template-areas:
+                    "question"
+                    "left-choice"
+                    "right-choice";
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
         /* Tracked State */
         .tracked-hover {
             border-color: #3b82f6;
@@ -188,7 +216,7 @@
                 </div>
 
                 <!-- LEFT CHOICE -->
-                <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone order-2 md:order-1 cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
+                <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         <i class="fa-solid fa-arrow-left mr-2 text-blue-400"></i> ยืนฝั่งซ้าย
                     </div>
@@ -201,7 +229,7 @@
                 </div>
 
                 <!-- CENTER CONSOLE -->
-                <div id="centerZone" class="center-console order-1 md:order-2 glass-panel rounded-3xl p-6 flex flex-col items-center justify-start border-t-4 border-b-4 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)] min-h-[520px]">
+                <div id="centerZone" class="center-console glass-panel rounded-3xl p-6 flex flex-col items-center justify-start border-t-4 border-b-4 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)] min-h-[520px]">
                     
                     <div class="w-full flex flex-nowrap justify-between items-center mb-4 gap-2">
                         <span id="levelBadge" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold uppercase tracking-wider text-white shadow-md text-center leading-tight whitespace-nowrap">ระดับ</span>
@@ -229,7 +257,7 @@
                 </div>
 
                 <!-- RIGHT CHOICE -->
-                <div id="rightZone" onclick="handleZoneClick('right')" class="side-zone order-3 cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
+                <div id="rightZone" onclick="handleZoneClick('right')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         ยืนฝั่งขวา <i class="fa-solid fa-arrow-right ml-2 text-blue-400"></i>
                     </div>
