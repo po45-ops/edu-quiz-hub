@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Anatomy Camera Quiz</title>
+    <title>SciQuiz | เกมตอบคำถามวิทยาศาสตร์</title>
+    <meta name="description" content="เว็บเกมตอบคำถามวิทยาศาสตร์ 4 ระดับชั้น รวม 200 ข้อ พร้อมนำเข้าคำถามจาก Excel">
+    <meta name="theme-color" content="#0f172a">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SheetJS for Excel Parsing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="./config.js"></script>
+    <script src="./questions-data.js"></script>
     
     <style>
         body {
@@ -95,7 +99,7 @@
     <!-- Loading Overlay for Cloud Sync -->
     <div id="cloudLoadingOverlay" class="absolute inset-0 z-[200] flex flex-col items-center justify-center bg-gray-900 bg-opacity-95">
         <i class="fa-solid fa-cloud-arrow-down fa-bounce text-blue-500 text-6xl mb-4"></i>
-        <h2 class="text-white text-2xl font-bold">กำลังเชื่อมต่อข้อมูลคลาวด์...</h2>
+        <h2 id="loadingStatus" class="text-white text-2xl font-bold">กำลังโหลดชุดคำถาม...</h2>
     </div>
 
     <!-- Custom System Modal -->
@@ -116,7 +120,7 @@
                 <i class="fa-solid fa-gear text-3xl"></i>
             </button>
 
-            <div class="glass-panel p-10 rounded-3xl text-center max-w-2xl mx-4 relative overflow-hidden w-full">
+            <div class="glass-panel p-6 md:p-10 rounded-3xl text-center max-w-2xl mx-4 relative overflow-y-auto max-h-[92vh] w-full">
                 <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500"></div>
                 
                 <!-- Dynamic Logo -->
@@ -176,7 +180,7 @@
         <!-- Main Game Area -->
         <main class="flex-grow container mx-auto p-4 relative z-10 flex flex-col justify-center h-full">
             
-            <div id="gameBoard" class="grid grid-cols-3 gap-6 h-full max-h-[700px] hidden opacity-0 transition-opacity duration-1000 relative">
+            <div id="gameBoard" class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 h-full max-h-full md:max-h-[700px] overflow-y-auto md:overflow-visible hidden opacity-0 transition-opacity duration-1000 relative">
                 
                 <!-- Pause Overlay (Inside GameBoard) -->
                 <div id="pauseOverlay" class="absolute inset-0 z-30 flex items-center justify-center bg-black bg-opacity-70 hidden backdrop-blur-md rounded-3xl border border-gray-500 shadow-2xl">
@@ -184,7 +188,7 @@
                 </div>
 
                 <!-- LEFT CHOICE -->
-                <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition">
+                <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone order-2 md:order-1 cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         <i class="fa-solid fa-arrow-left mr-2 text-blue-400"></i> ยืนฝั่งซ้าย
                     </div>
@@ -197,7 +201,7 @@
                 </div>
 
                 <!-- CENTER CONSOLE -->
-                <div id="centerZone" class="center-console glass-panel rounded-3xl p-6 flex flex-col items-center justify-start border-t-4 border-b-4 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+                <div id="centerZone" class="center-console order-1 md:order-2 glass-panel rounded-3xl p-6 flex flex-col items-center justify-start border-t-4 border-b-4 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)] min-h-[520px]">
                     
                     <div class="w-full flex flex-nowrap justify-between items-center mb-4 gap-2">
                         <span id="levelBadge" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold uppercase tracking-wider text-white shadow-md text-center leading-tight whitespace-nowrap">ระดับ</span>
@@ -225,7 +229,7 @@
                 </div>
 
                 <!-- RIGHT CHOICE -->
-                <div id="rightZone" onclick="handleZoneClick('right')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition">
+                <div id="rightZone" onclick="handleZoneClick('right')" class="side-zone order-3 cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         ยืนฝั่งขวา <i class="fa-solid fa-arrow-right ml-2 text-blue-400"></i>
                     </div>
@@ -267,7 +271,7 @@
         <div id="adminLoginModal" class="absolute inset-0 z-[80] flex items-center justify-center bg-black bg-opacity-80 hidden backdrop-blur-sm">
             <div class="bg-gray-800 p-8 rounded-2xl w-full max-w-sm border border-gray-600 shadow-2xl">
                 <h2 class="text-2xl font-bold text-white mb-4"><i class="fa-solid fa-lock text-yellow-400 mr-2"></i> รหัสผ่านผู้ดูแลระบบ</h2>
-                <input type="password" id="adminPin" placeholder="PIN (ลองพิมพ์: 1234)" class="w-full p-3 rounded-lg bg-gray-900 text-white border border-gray-600 mb-4 focus:border-blue-500 focus:outline-none">
+                <input type="password" id="adminPin" placeholder="กรอก PIN ผู้ดูแล" class="w-full p-3 rounded-lg bg-gray-900 text-white border border-gray-600 mb-4 focus:border-blue-500 focus:outline-none">
                 <p id="loginError" class="text-red-400 text-sm mb-4 hidden">รหัสผ่านไม่ถูกต้อง</p>
                 <div class="flex justify-end gap-3">
                     <button onclick="document.getElementById('adminLoginModal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500">ยกเลิก</button>
@@ -281,7 +285,7 @@
             <div class="container mx-auto p-6">
                 
                 <div class="flex justify-between items-center mb-8 bg-gray-800 p-4 rounded-2xl border border-gray-600 flex-wrap gap-4">
-                    <h1 class="text-2xl md:text-3xl font-bold text-white"><i class="fa-solid fa-cloud text-blue-400 mr-2"></i> ระบบจัดการคลาวด์ (Cloud Admin)</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold text-white"><i class="fa-solid fa-database text-blue-400 mr-2"></i> ระบบจัดการชุดคำถาม</h1>
                     <button onclick="closeAdmin()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
                         <i class="fa-solid fa-xmark mr-2"></i> ปิดระบบ
                     </button>
@@ -302,7 +306,7 @@
                                 <input type="text" id="adminLogoIcon" class="w-full p-2 rounded bg-gray-900 text-white border border-gray-600" placeholder="เช่น fa-heart-pulse">
                             </div>
                             <button onclick="saveGlobalSettings()" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded font-bold shadow">
-                                <i class="fa-solid fa-cloud-arrow-up mr-2"></i> บันทึกขึ้นคลาวด์
+                                <i class="fa-solid fa-floppy-disk mr-2"></i> บันทึกข้อมูล
                             </button>
                         </div>
                     </div>
@@ -370,12 +374,8 @@
 
     </div>
 
-    <!-- MODULE SCRIPT FOR FIREBASE & LOGIC -->
+    <!-- APP LOGIC -->
     <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-
         // ==========================================
         // 1. DATA STATE & DEFAULTS
         // ==========================================
@@ -461,6 +461,10 @@
             ]
         };
 
+        if (window.MEDQUIZ_DEFAULT_DATA?.sets?.length) {
+            appData = JSON.parse(JSON.stringify(window.MEDQUIZ_DEFAULT_DATA));
+        }
+
         let currentQuestionIndex = 0;
         let score = 0;
         let timeLeft = 20;
@@ -477,58 +481,101 @@
         window.timeUpTimeout3 = null;
 
         // ==========================================
-        // 2. FIREBASE SETUP
+        // 2. DATA STORAGE (LOCAL BY DEFAULT, FIREBASE OPTIONAL)
         // ==========================================
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const STORAGE_KEY = 'sciquiz-question-data-v1';
+        const ADMIN_PIN = window.MEDQUIZ_ADMIN_PIN || '1234';
+        let storageMode = 'local';
+        let firebaseStore = null;
+        let firebaseDocRef = null;
 
-        // Public Document path for all users to read
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameData', 'main_v2');
+        function isValidAppData(data) {
+            return Boolean(
+                data && data.settings && Array.isArray(data.sets) &&
+                data.sets.every(set => set && typeof set.name === 'string' && Array.isArray(set.questions))
+            );
+        }
 
-        async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+        function loadDataFromBrowser() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (!saved) return;
+                const parsed = JSON.parse(saved);
+                if (isValidAppData(parsed)) appData = parsed;
+            } catch (error) {
+                console.warn('Local data could not be loaded; using bundled questions.', error);
             }
         }
-        
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                await loadDataFromCloud();
-                document.getElementById('cloudLoadingOverlay').classList.add('hidden');
-                document.getElementById('uiLayer').classList.remove('hidden');
-                initAppUI();
+
+        function getFirebaseConfig() {
+            let raw = window.MEDQUIZ_FIREBASE_CONFIG;
+            if (!raw && typeof __firebase_config !== 'undefined') raw = __firebase_config;
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+                try { return JSON.parse(raw); } catch { return null; }
             }
-        });
+            return raw;
+        }
 
-        initAuth();
+        async function startApp() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            const firebaseConfig = getFirebaseConfig();
 
-        async function loadDataFromCloud() {
-            try {
-                const snap = await getDoc(docRef);
-                if (snap.exists()) {
-                    appData = snap.data();
-                } else {
-                    await setDoc(docRef, appData); 
+            if (firebaseConfig?.apiKey && firebaseConfig?.projectId) {
+                try {
+                    loadingStatus.innerText = 'กำลังเชื่อมต่อข้อมูลออนไลน์...';
+                    const [appModule, authModule, firestoreModule] = await Promise.all([
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js'),
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js'),
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js')
+                    ]);
+
+                    const firebaseApp = appModule.initializeApp(firebaseConfig);
+                    const auth = authModule.getAuth(firebaseApp);
+                    const db = firestoreModule.getFirestore(firebaseApp);
+                    const appId = window.MEDQUIZ_APP_ID || (typeof __app_id !== 'undefined' ? __app_id : 'sciquiz-github-pages');
+                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                    if (token) await authModule.signInWithCustomToken(auth, token);
+                    else await authModule.signInAnonymously(auth);
+
+                    firebaseDocRef = firestoreModule.doc(db, 'artifacts', appId, 'public', 'data', 'gameData', 'main_v2');
+                    firebaseStore = firestoreModule;
+                    const snapshot = await firestoreModule.getDoc(firebaseDocRef);
+
+                    if (snapshot.exists() && isValidAppData(snapshot.data())) appData = snapshot.data();
+                    else await firestoreModule.setDoc(firebaseDocRef, appData);
+                    storageMode = 'cloud';
+                } catch (error) {
+                    console.warn('Firebase unavailable; switching to browser storage.', error);
+                    loadDataFromBrowser();
+                    loadingStatus.innerText = 'กำลังเปิดข้อมูลในเครื่อง...';
                 }
-            } catch(e) {
-                console.error("Cloud load error, using local defaults", e);
-                sysAlert("การเชื่อมต่อคลาวด์มีปัญหา กำลังใช้ข้อมูลเริ่มต้นสำรอง");
+            } else {
+                loadDataFromBrowser();
             }
+
+            document.getElementById('cloudLoadingOverlay').classList.add('hidden');
+            document.getElementById('uiLayer').classList.remove('hidden');
+            initAppUI();
         }
 
         async function saveDataToCloud() {
             try {
-                await setDoc(docRef, appData);
-            } catch (e) {
-                console.error("Save error", e);
-                sysAlert("เกิดข้อผิดพลาดในการบันทึกขึ้นคลาวด์ กรุณาลองใหม่");
+                if (storageMode === 'cloud' && firebaseStore && firebaseDocRef) {
+                    await firebaseStore.setDoc(firebaseDocRef, appData);
+                } else {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+                }
+                return true;
+            } catch (error) {
+                console.error('Save error', error);
+                sysAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');
+                return false;
             }
         }
+
+        startApp();
 
         // ==========================================
         // 3. UTILS & MODALS
@@ -846,7 +893,7 @@
 
         window.checkAdminLogin = () => {
             const pin = document.getElementById('adminPin').value;
-            if (pin === '1234') { // Admin PIN
+            if (pin === ADMIN_PIN) {
                 document.getElementById('adminLoginModal').classList.add('hidden');
                 document.getElementById('loginError').classList.add('hidden');
                 document.getElementById('adminDashboard').classList.remove('hidden');
@@ -866,9 +913,12 @@
         window.saveGlobalSettings = async () => {
             appData.settings.logoText = document.getElementById('adminLogoText').value;
             appData.settings.logoIcon = document.getElementById('adminLogoIcon').value;
-            await saveDataToCloud();
-            sysAlert("บันทึกการตั้งค่าแบรนด์ขึ้นคลาวด์สำเร็จ");
-            initAppUI();
+            const saved = await saveDataToCloud();
+            if (saved) {
+                const destination = storageMode === 'cloud' ? 'ระบบออนไลน์' : 'เบราว์เซอร์เครื่องนี้';
+                sysAlert(`บันทึกการตั้งค่าใน${destination}สำเร็จ`);
+                initAppUI();
+            }
         };
 
         function renderAdminSets() {
