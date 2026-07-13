@@ -56,19 +56,29 @@
 
         /* Lock the desktop layout: left choice | question | right choice */
         #gameBoard {
+            direction: ltr;
             grid-template-areas: "left-choice question right-choice";
             grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr) minmax(0, 1fr);
         }
+        #gameBoard:not(.hidden) {
+            display: grid !important;
+        }
         #leftZone {
             grid-area: left-choice;
+            grid-column: 1 / 2 !important;
+            grid-row: 1 !important;
             order: initial !important;
         }
         #centerZone {
             grid-area: question;
+            grid-column: 2 / 3 !important;
+            grid-row: 1 !important;
             order: initial !important;
         }
         #rightZone {
             grid-area: right-choice;
+            grid-column: 3 / 4 !important;
+            grid-row: 1 !important;
             order: initial !important;
         }
 
@@ -79,6 +89,18 @@
                     "left-choice"
                     "right-choice";
                 grid-template-columns: minmax(0, 1fr);
+            }
+            #centerZone {
+                grid-column: 1 !important;
+                grid-row: 1 !important;
+            }
+            #leftZone {
+                grid-column: 1 !important;
+                grid-row: 2 !important;
+            }
+            #rightZone {
+                grid-column: 1 !important;
+                grid-row: 3 !important;
             }
         }
 
