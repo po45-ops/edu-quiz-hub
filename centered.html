@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SciQuiz | เกมตอบคำถามวิทยาศาสตร์</title>
+    <meta name="description" content="เว็บเกมตอบคำถามวิทยาศาสตร์ 4 ระดับชั้น รวม 200 ข้อ พร้อมนำเข้าคำถามจาก Excel">
+    <meta name="theme-color" content="#0f172a">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Excel Parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="./config.js"></script>
+    <script src="./questions-data.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: radial-gradient(circle at center, #1e293b 0%, #000000 100%);
+            overflow: hidden;
+            touch-action: manipulation;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* UI Layer */
+        #uiLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        .admin-panel {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+        }
+
+        /* Zones */
+        .side-zone {
+            transition: all 0.2s ease;
+            border: 4px solid rgba(255,255,255,0.1);
+        }
+
+        /* Lock the desktop layout: left choice | question | right choice */
+        #gameBoard {
+            direction: ltr;
+            grid-template-areas: "left-choice question right-choice";
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr) minmax(0, 1fr);
+        }
+        #gameBoard:not(.hidden) {
+            display: grid !important;
+        }
+        #leftZone {
+            grid-area: left-choice;
+            grid-column: 1 / 2 !important;
+            grid-row: 1 !important;
+            order: initial !important;
+        }
+        #centerZone {
+            grid-area: question;
+            grid-column: 2 / 3 !important;
+            grid-row: 1 !important;
+            order: initial !important;
+        }
+        #rightZone {
+            grid-area: right-choice;
+            grid-column: 3 / 4 !important;
+            grid-row: 1 !important;
+            order: initial !important;
+        }
+
+        @media (max-width: 767px) {
+            #gameBoard {
+                grid-template-areas:
+                    "question"
+                    "left-choice"
+                    "right-choice";
+                grid-template-columns: minmax(0, 1fr);
+            }
+            #centerZone {
+                grid-column: 1 !important;
+                grid-row: 1 !important;
+            }
+            #leftZone {
+                grid-column: 1 !important;
+                grid-row: 2 !important;
+            }
+            #rightZone {
+                grid-column: 1 !important;
+                grid-row: 3 !important;
+            }
+        }
+
+        /* Tracked State */
+        .tracked-hover {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+            transform: scale(1.02);
+        }
+
+        /* Final Result States */
+        .correct-zone { 
+            border-color: #22c55e !important; 
+            background: rgba(34, 197, 94, 0.4) !important; 
+            box-shadow: 0 0 50px rgba(34, 197, 94, 0.8) !important;
+        }
+        .wrong-zone { 
+            border-color: #ef4444 !important; 
+            background: rgba(239, 68, 68, 0.4) !important; 
+            box-shadow: 0 0 50px rgba(239, 68, 68, 0.8) !important;
+        }
+        .dimmed { opacity: 0.3; filter: grayscale(100%); }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); border-color: rgba(239, 68, 68, 1); }
+            50% { box-shadow: 0 0 50px 20px rgba(239, 68, 68, 0.5); border-color: rgba(255, 0, 0, 1); background: rgba(239, 68, 68, 0.3); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); border-color: rgba(239, 68, 68, 1); }
+        }
+
+        .timer-warning {
+            animation: pulse-red 0.5s infinite;
+            color: #ef4444 !important;
+        }
+
+        /* Scrollbar for admin */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Loading Overlay for Cloud Sync -->
+    <div id="cloudLoadingOverlay" class="absolute inset-0 z-[200] flex flex-col items-center justify-center bg-gray-900 bg-opacity-95">
+        <i class="fa-solid fa-cloud-arrow-down fa-bounce text-blue-500 text-6xl mb-4"></i>
+        <h2 id="loadingStatus" class="text-white text-2xl font-bold">กำลังโหลดชุดคำถาม...</h2>
+    </div>
+
+    <!-- Custom System Modal -->
+    <div id="sysModal" class="absolute inset-0 z-[150] flex items-center justify-center bg-black bg-opacity-80 hidden backdrop-blur-sm">
+        <div class="bg-gray-800 p-8 rounded-2xl w-full max-w-sm border border-gray-600 shadow-2xl text-center transform transition-transform scale-95" id="sysModalBox">
+            <h3 id="sysModalText" class="text-white text-xl mb-6 font-semibold">Message</h3>
+            <div id="sysModalActions" class="flex justify-center gap-4">
+                <!-- buttons -->
+            </div>
+        </div>
+    </div>
+
+    <div id="uiLayer" class="hidden">
+        <!-- Start Screen -->
+        <div id="startScreen" class="absolute inset-0 z-[60] flex items-center justify-center bg-gray-900 bg-opacity-90 backdrop-blur-md">
+            <!-- Admin Button (Hidden from normal view) -->
+            <button onclick="showAdminLogin()" class="absolute bottom-6 right-6 text-gray-600 hover:text-white transition">
+                <i class="fa-solid fa-gear text-3xl"></i>
+            </button>
+
+            <div class="glass-panel p-6 md:p-10 rounded-3xl text-center max-w-2xl mx-4 relative overflow-y-auto max-h-[92vh] w-full">
+                <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500"></div>
+                
+                <!-- Dynamic Logo -->
+                <div class="text-4xl text-white mb-2 font-bold flex justify-center items-center">
+                    <i id="startLogoIcon" class="fa-solid fa-heart-pulse text-red-500 mr-3"></i> 
+                    <span id="startLogoText">MedQuiz</span>
+                </div>
+
+                <h1 class="text-4xl md:text-5xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                    Motion Camera Quiz
+                </h1>
+                
+                <p class="text-gray-200 text-lg mb-6">
+                    <span class="text-yellow-400 font-semibold">กติกา:</span> คุณมีเวลา <b>20 วินาที</b> ในการอ่านคำถามและคลิกเลือกคำตอบ <b>"ฝั่งซ้าย"</b> หรือ <b>"ฝั่งขวา"</b> ให้ถูกต้อง<br>
+                </p>
+
+                <!-- Category Selector & Shuffle -->
+                <div class="mb-8 text-left bg-gray-800 bg-opacity-50 p-5 rounded-xl border border-gray-600">
+                    <label class="block text-gray-300 mb-2 font-semibold">เลือกชุดคำถามที่ต้องการเล่น:</label>
+                    <select id="setSelector" class="w-full p-3 rounded-lg bg-gray-900 text-white border border-gray-500 focus:border-blue-500 focus:outline-none text-lg cursor-pointer mb-4">
+                        <!-- Options populated via JS -->
+                    </select>
+                    
+                    <label class="flex items-center space-x-3 cursor-pointer hover:bg-gray-700 p-2 rounded transition w-max">
+                        <input type="checkbox" id="shuffleCheckbox" class="w-6 h-6 rounded accent-blue-500 cursor-pointer">
+                        <span class="text-white font-semibold text-lg">สุ่มลำดับข้อสอบ (Shuffle Mode)</span>
+                    </label>
+                </div>
+                
+                <div id="actionButtons" class="space-y-4">
+                    <button onclick="startGame()" class="w-full py-4 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xl font-bold shadow-lg transform transition hover:scale-105 border border-blue-400">
+                        <i class="fa-solid fa-play mr-2"></i> เริ่มเล่นเกม
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header: ยกระดับ Z-index เป็น 50 ให้อยู่บนสุดเสมอ -->
+        <header class="p-4 flex justify-between items-center bg-black bg-opacity-40 border-b border-gray-700 z-50 w-full relative">
+            <div class="text-xl font-bold text-white flex items-center">
+                <i id="gameLogoIcon" class="fa-solid fa-heart-pulse text-red-500 mr-2"></i> 
+                <span id="gameLogoText">MedQuiz</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="pauseBtn" onclick="togglePause()" class="hidden bg-yellow-500 hover:bg-yellow-400 text-gray-900 px-5 py-2 rounded-full font-bold shadow-[0_0_15px_rgba(234,179,8,0.5)] transition transform hover:scale-105 relative">
+                    <i class="fa-solid fa-pause mr-2" id="pauseIcon"></i> <span id="pauseText">หยุด</span>
+                </button>
+                <button id="backBtn" onclick="goToHome()" class="hidden bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-full font-bold shadow-[0_0_15px_rgba(220,38,38,0.5)] transition transform hover:scale-105 relative">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> ออก
+                </button>
+                <div class="text-xl font-bold text-white bg-gray-800 px-6 py-2 rounded-full border border-gray-600 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                    คะแนน: <span id="scoreDisplay" class="text-emerald-400">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="flex-grow container mx-auto p-4 relative z-10 flex flex-col justify-center h-full">
+            
+            <div id="gameBoard" class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 h-full max-h-full md:max-h-[700px] overflow-y-auto md:overflow-visible hidden opacity-0 transition-opacity duration-1000 relative">
+                
+                <!-- Pause Overlay (Inside GameBoard) -->
+                <div id="pauseOverlay" class="absolute inset-0 z-30 flex items-center justify-center bg-black bg-opacity-70 hidden backdrop-blur-md rounded-3xl border border-gray-500 shadow-2xl">
+                    <h2 class="text-5xl md:text-7xl font-black text-white drop-shadow-lg tracking-widest"><i class="fa-solid fa-pause mr-4 text-yellow-400"></i>เกมหยุดชั่วคราว</h2>
+                </div>
+
+                <!-- LEFT CHOICE -->
+                <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
+                    <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
+                        <i class="fa-solid fa-arrow-left mr-2 text-blue-400"></i> ยืนฝั่งซ้าย
+                    </div>
+                    <div class="mt-12 text-center flex-grow flex flex-col justify-center w-full pointer-events-none">
+                        <h2 id="leftText" class="text-4xl xl:text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] leading-tight break-words">ตัวเลือก A</h2>
+                    </div>
+                    <button class="mt-6 px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-500 rounded-full text-white font-bold text-xl shadow-[0_0_15px_rgba(37,99,235,0.5)] transition transform hover:scale-105 pointer-events-none border border-blue-400">
+                        <i class="fa-solid fa-hand-pointer mr-2"></i> เลือกฝั่งซ้าย
+                    </button>
+                </div>
+
+                <!-- CENTER CONSOLE -->
+                <div id="centerZone" class="center-console glass-panel rounded-3xl p-6 flex flex-col items-center justify-start border-t-4 border-b-4 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)] min-h-[520px]">
+                    
+                    <div class="w-full flex flex-nowrap justify-between items-center mb-4 gap-2">
+                        <span id="levelBadge" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold uppercase tracking-wider text-white shadow-md text-center leading-tight whitespace-nowrap">ระดับ</span>
+                        <span class="text-gray-300 font-bold bg-black px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">ข้อ <span id="questionNumber">1</span>/<span id="totalQuestions">10</span></span>
+                    </div>
+
+                    <div class="text-center w-full mb-2 flex-grow flex flex-col items-center justify-center">
+                        <h3 id="questionText" class="text-xl lg:text-3xl font-bold text-white mb-4 leading-tight drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">
+                            กำลังรอคำถาม...
+                        </h3>
+                        
+                        <div class="relative w-full max-w-[280px] aspect-video lg:aspect-square rounded-2xl overflow-hidden border-2 border-gray-500 mb-4 shadow-2xl bg-gray-800 flex items-center justify-center">
+                            <img id="questionImage" src="" alt="Question Image" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/600x400/1e293b/38bdf8?text=Image+Not+Found';">
+                        </div>
+                    </div>
+
+                    <!-- Timer -->
+                    <div id="timerContainer" class="w-full bg-black bg-opacity-80 rounded-2xl p-4 text-center border-2 border-gray-500 transition-all duration-300">
+                        <div class="text-gray-300 text-sm mb-1 uppercase tracking-widest font-bold">เวลาตัดสินใจ (วินาที)</div>
+                        <div class="text-6xl font-black font-mono tracking-tighter text-white" id="timerDisplay">20</div>
+                        <div class="w-full bg-gray-800 h-3 mt-3 rounded-full overflow-hidden border border-gray-600">
+                            <div id="timerBar" class="bg-white h-full w-full transition-all duration-1000 ease-linear"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT CHOICE -->
+                <div id="rightZone" onclick="handleZoneClick('right')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
+                    <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
+                        ยืนฝั่งขวา <i class="fa-solid fa-arrow-right ml-2 text-blue-400"></i>
+                    </div>
+                    <div class="mt-12 text-center flex-grow flex flex-col justify-center w-full pointer-events-none">
+                        <h2 id="rightText" class="text-4xl xl:text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] leading-tight break-words">ตัวเลือก B</h2>
+                    </div>
+                    <button class="mt-6 px-8 py-3 bg-gradient-to-r from-purple-600 to-purple-500 rounded-full text-white font-bold text-xl shadow-[0_0_15px_rgba(147,51,234,0.5)] transition transform hover:scale-105 pointer-events-none border border-purple-400">
+                        <i class="fa-solid fa-hand-pointer mr-2"></i> เลือกฝั่งขวา
+                    </button>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Result Overlay -->
+        <div id="resultOverlay" class="absolute inset-0 z-[45] flex items-center justify-center bg-black bg-opacity-80 hidden backdrop-blur-sm transition-opacity duration-500">
+            <div id="resultMessage" class="text-6xl md:text-8xl font-black text-center transform scale-0 transition-transform duration-500 w-full px-4">
+            </div>
+        </div>
+
+        <!-- End Screen -->
+        <div id="endScreen" class="absolute inset-0 z-[60] flex items-center justify-center bg-gray-900 bg-opacity-95 hidden backdrop-blur-lg">
+            <div class="glass-panel p-10 rounded-3xl text-center max-w-lg mx-4">
+                <h1 class="text-5xl font-bold mb-4 text-white">สรุปผลการทดสอบ</h1>
+                <p class="text-gray-300 text-xl mb-6">ความแม่นยำของคุณ</p>
+                <div class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-8">
+                    <span id="finalScore">0</span> / <span id="finalTotal">10</span>
+                </div>
+                <p id="feedbackText" class="text-xl text-white mb-8 font-semibold"></p>
+                <button onclick="goToHome()" class="w-full py-4 rounded-full bg-white text-gray-900 hover:bg-gray-200 text-xl font-bold shadow-lg transform transition hover:scale-105 relative z-50">
+                    <i class="fa-solid fa-rotate-right mr-2"></i> กลับหน้าหลัก
+                </button>
+            </div>
+        </div>
+
+        <!-- ======================= ADMIN SYSTEM ======================= -->
+        
+        <!-- Admin Login Modal -->
+        <div id="adminLoginModal" class="absolute inset-0 z-[80] flex items-center justify-center bg-black bg-opacity-80 hidden backdrop-blur-sm">
+            <div class="bg-gray-800 p-8 rounded-2xl w-full max-w-sm border border-gray-600 shadow-2xl">
+                <h2 class="text-2xl font-bold text-white mb-4"><i class="fa-solid fa-lock text-yellow-400 mr-2"></i> รหัสผ่านผู้ดูแลระบบ</h2>
+                <input type="password" id="adminPin" placeholder="กรอก PIN ผู้ดูแล" class="w-full p-3 rounded-lg bg-gray-900 text-white border border-gray-600 mb-4 focus:border-blue-500 focus:outline-none">
+                <p id="loginError" class="text-red-400 text-sm mb-4 hidden">รหัสผ่านไม่ถูกต้อง</p>
+                <div class="flex justify-end gap-3">
+                    <button onclick="document.getElementById('adminLoginModal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500">ยกเลิก</button>
+                    <button onclick="checkAdminLogin()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 font-bold">เข้าสู่ระบบ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Dashboard -->
+        <div id="adminDashboard" class="absolute inset-0 z-[90] admin-panel hidden overflow-y-auto">
+            <div class="container mx-auto p-6">
+                
+                <div class="flex justify-between items-center mb-8 bg-gray-800 p-4 rounded-2xl border border-gray-600 flex-wrap gap-4">
+                    <h1 class="text-2xl md:text-3xl font-bold text-white"><i class="fa-solid fa-database text-blue-400 mr-2"></i> ระบบจัดการชุดคำถาม</h1>
+                    <button onclick="closeAdmin()" class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded-full font-bold shadow-lg">
+                        <i class="fa-solid fa-xmark mr-2"></i> ปิดระบบ
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Left Col: Global Settings -->
+                    <div class="bg-gray-800 p-6 rounded-2xl border border-gray-600 h-fit">
+                        <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">ตั้งค่าแบรนด์ (Global Settings)</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-gray-400 mb-1 text-sm">ชื่อโลโก้ (Logo Text)</label>
+                                <input type="text" id="adminLogoText" class="w-full p-2 rounded bg-gray-900 text-white border border-gray-600">
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 mb-1 text-sm">ไอคอนโลโก้ (FontAwesome Class)</label>
+                                <input type="text" id="adminLogoIcon" class="w-full p-2 rounded bg-gray-900 text-white border border-gray-600" placeholder="เช่น fa-heart-pulse">
+                            </div>
+                            <button onclick="saveGlobalSettings()" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded font-bold shadow">
+                                <i class="fa-solid fa-floppy-disk mr-2"></i> บันทึกข้อมูล
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Col: Sets Management -->
+                    <div class="lg:col-span-2 bg-gray-800 p-6 rounded-2xl border border-gray-600">
+                        <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                            <h2 class="text-xl font-bold text-white">จัดการชุดคำถาม (Question Sets)</h2>
+                            <button onclick="createNewSet()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold shadow text-sm">
+                                <i class="fa-solid fa-plus mr-1"></i> สร้างชุดใหม่
+                            </button>
+                        </div>
+                        
+                        <div id="adminSetsList" class="space-y-3">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Question Editor Modal -->
+        <div id="setEditorModal" class="absolute inset-0 z-[100] admin-panel hidden overflow-y-auto p-4 md:p-10">
+            <div class="max-w-6xl mx-auto bg-gray-800 rounded-3xl border border-gray-600 shadow-2xl flex flex-col min-h-full">
+                
+                <!-- Editor Header -->
+                <div class="p-6 border-b border-gray-700 flex flex-wrap justify-between items-center bg-gray-900 rounded-t-3xl gap-4">
+                    <div class="w-full max-w-lg">
+                        <label class="block text-gray-400 text-xs mb-1 uppercase tracking-wide">ชื่อชุดคำถาม (Set Name)</label>
+                        <input type="text" id="editSetName" class="w-full bg-transparent text-white text-2xl font-bold border-b border-gray-600 focus:border-blue-500 focus:outline-none pb-1">
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <input type="file" id="excelInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)">
+                        
+                        <button onclick="downloadExcelTemplate()" class="px-4 py-2 border border-green-500 text-green-400 hover:bg-green-900 hover:text-white rounded-lg text-sm font-semibold transition">
+                            <i class="fa-solid fa-download mr-1"></i> โหลดเทมเพลต Excel
+                        </button>
+                        
+                        <button onclick="triggerExcelUpload()" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-bold shadow transition flex items-center">
+                            <i class="fa-solid fa-file-excel mr-2 text-xl"></i> นำเข้าจาก Excel
+                        </button>
+
+                        <button onclick="closeSetEditor()" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-bold shadow">
+                            <i class="fa-solid fa-check mr-2"></i> เสร็จสิ้น
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Editor Body: Question List -->
+                <div class="p-6 flex-grow bg-gray-800">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-white">รายการข้อคำถาม</h3>
+                        <button onclick="addNewQuestionToSet()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold shadow text-sm">
+                            <i class="fa-solid fa-plus mr-1"></i> เพิ่มข้อเดียว (Manual)
+                        </button>
+                    </div>
+
+                    <div id="adminQuestionsList" class="space-y-4">
+                        <!-- Questions populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- APP LOGIC -->
+    <script type="module">
+        // ==========================================
+        // 1. DATA STATE & DEFAULTS
+        // ==========================================
+        let appData = {
+            settings: { logoIcon: "fa-heart-pulse", logoText: "MedQuiz" },
+            sets: [
+                {
+                    id: "set_default_1",
+                    name: "กายวิภาคศาสตร์ (Anatomy) - พื้นฐาน",
+                    questions: [
+                        {
+                            level: "ง่าย (Easy)", levelColor: "bg-green-600",
+                            question: "อวัยวะใดทำหน้าที่สูบฉีดเลือดไปเลี้ยงส่วนต่างๆ ของร่างกาย?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Heart_diagram-en.svg/640px-Heart_diagram-en.svg.png",
+                            leftChoice: "หัวใจ", rightChoice: "ปอด",
+                            correctSide: "left"
+                        },
+                        {
+                            level: "ง่าย (Easy)", levelColor: "bg-green-600",
+                            question: "อวัยวะใดเป็นศูนย์กลางควบคุมระบบประสาท ความคิด และความจำ?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Human_brain_midsagittal_view_description.JPG/640px-Human_brain_midsagittal_view_description.JPG",
+                            leftChoice: "กระเพาะ", rightChoice: "สมอง",
+                            correctSide: "right"
+                        },
+                        {
+                            level: "ง่าย (Easy)", levelColor: "bg-green-600",
+                            question: "อวัยวะใดทำหน้าที่แลกเปลี่ยนก๊าซออกซิเจนและคาร์บอนไดออกไซด์?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Respiratory_system_complete_en.svg/640px-Respiratory_system_complete_en.svg.png",
+                            leftChoice: "ปอด", rightChoice: "ตับ",
+                            correctSide: "left"
+                        },
+                        {
+                            level: "ปานกลาง (Medium)", levelColor: "bg-yellow-600",
+                            question: "อวัยวะใดผลิตน้ำย่อยและกรดเพื่อย่อยโปรตีนเป็นหลัก?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Stomach_diagram.svg/640px-Stomach_diagram.svg.png",
+                            leftChoice: "กระเพาะอาหาร", rightChoice: "ลำไส้ใหญ่",
+                            correctSide: "left"
+                        },
+                        {
+                            level: "ปานกลาง (Medium)", levelColor: "bg-yellow-600",
+                            question: "อวัยวะใดทำหน้าที่กรองของเสียออกจากเลือด สร้างเป็นน้ำปัสสาวะ?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/2610_The_Kidney.jpg/640px-2610_The_Kidney.jpg",
+                            leftChoice: "ตับอ่อน", rightChoice: "ไต",
+                            correctSide: "right"
+                        },
+                        {
+                            level: "ปานกลาง (Medium)", levelColor: "bg-yellow-600",
+                            question: "การย่อยและการดูดซึมสารอาหารส่วนใหญ่ เกิดขึ้นที่ใด?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bd/Illu_small_intestine.jpg/640px-Illu_small_intestine.jpg",
+                            leftChoice: "ลำไส้ใหญ่", rightChoice: "ลำไส้เล็ก",
+                            correctSide: "right"
+                        },
+                        {
+                            level: "ยาก (Hard)", levelColor: "bg-red-600",
+                            question: "อวัยวะใดที่ใหญ่ที่สุดในร่างกาย และทำหน้าที่กำจัดสารพิษ ผลิตน้ำดี?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Liver.svg/640px-Liver.svg.png",
+                            leftChoice: "ตับ", rightChoice: "ม้าม",
+                            correctSide: "left"
+                        },
+                        {
+                            level: "ยาก (Hard)", levelColor: "bg-red-600",
+                            question: "โครงสร้างใดปกป้องไขสันหลังและคอยพยุงร่างกาย?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Gray111_-_Vertebral_column.png/640px-Gray111_-_Vertebral_column.png",
+                            leftChoice: "กระดูกสันหลัง", rightChoice: "กระดูกซี่โครง",
+                            correctSide: "left"
+                        },
+                        {
+                            level: "ยาก (Hard)", levelColor: "bg-red-600",
+                            question: "อวัยวะใดเป็นแหล่งทำลายเม็ดเลือดแดงที่หมดอายุ และกักเก็บเลือด?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Illu_spleen.jpg/640px-Illu_spleen.jpg",
+                            leftChoice: "หัวใจ", rightChoice: "ม้าม",
+                            correctSide: "right"
+                        },
+                        {
+                            level: "ยาก (Hard)", levelColor: "bg-red-600",
+                            question: "อวัยวะใดทำหน้าที่ผลิตฮอร์โมนอินซูลินเพื่อควบคุมน้ำตาลในเลือด?",
+                            image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Illu_pancrease.jpg/640px-Illu_pancrease.jpg",
+                            leftChoice: "ตับอ่อน", rightChoice: "ต่อมหมวกไต",
+                            correctSide: "left"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        if (window.MEDQUIZ_DEFAULT_DATA?.sets?.length) {
+            appData = JSON.parse(JSON.stringify(window.MEDQUIZ_DEFAULT_DATA));
+        }
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let timeLeft = 20;
+        let timerInterval;
+        let isGameActive = false;
+        let isPaused = false;
+        let currentTrackedSide = null; 
+        let activeQuestions = [];
+        let editingSetId = null;
+
+        // ตัวแปรสำหรับป้องกัน Timeout ค้างในระบบ
+        window.timeUpTimeout1 = null;
+        window.timeUpTimeout2 = null;
+        window.timeUpTimeout3 = null;
+
+        // ==========================================
+        // 2. DATA STORAGE (LOCAL BY DEFAULT, FIREBASE OPTIONAL)
+        // ==========================================
+        const STORAGE_KEY = 'sciquiz-question-data-v1';
+        const ADMIN_PIN = window.MEDQUIZ_ADMIN_PIN || '1234';
+        let storageMode = 'local';
+        let firebaseStore = null;
+        let firebaseDocRef = null;
+
+        function isValidAppData(data) {
+            return Boolean(
+                data && data.settings && Array.isArray(data.sets) &&
+                data.sets.every(set => set && typeof set.name === 'string' && Array.isArray(set.questions))
+            );
+        }
+
+        function loadDataFromBrowser() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (!saved) return;
+                const parsed = JSON.parse(saved);
+                if (isValidAppData(parsed)) appData = parsed;
+            } catch (error) {
+                console.warn('Local data could not be loaded; using bundled questions.', error);
+            }
+        }
+
+        function getFirebaseConfig() {
+            let raw = window.MEDQUIZ_FIREBASE_CONFIG;
+            if (!raw && typeof __firebase_config !== 'undefined') raw = __firebase_config;
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+                try { return JSON.parse(raw); } catch { return null; }
+            }
+            return raw;
+        }
+
+        async function startApp() {
+            const loadingStatus = document.getElementById('loadingStatus');
+            const firebaseConfig = getFirebaseConfig();
+
+            if (firebaseConfig?.apiKey && firebaseConfig?.projectId) {
+                try {
+                    loadingStatus.innerText = 'กำลังเชื่อมต่อข้อมูลออนไลน์...';
+                    const [appModule, authModule, firestoreModule] = await Promise.all([
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js'),
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js'),
+                        import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js')
+                    ]);
+
+                    const firebaseApp = appModule.initializeApp(firebaseConfig);
+                    const auth = authModule.getAuth(firebaseApp);
+                    const db = firestoreModule.getFirestore(firebaseApp);
+                    const appId = window.MEDQUIZ_APP_ID || (typeof __app_id !== 'undefined' ? __app_id : 'sciquiz-github-pages');
+                    const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                    if (token) await authModule.signInWithCustomToken(auth, token);
+                    else await authModule.signInAnonymously(auth);
+
+                    firebaseDocRef = firestoreModule.doc(db, 'artifacts', appId, 'public', 'data', 'gameData', 'main_v2');
+                    firebaseStore = firestoreModule;
+                    const snapshot = await firestoreModule.getDoc(firebaseDocRef);
+
+                    if (snapshot.exists() && isValidAppData(snapshot.data())) appData = snapshot.data();
+                    else await firestoreModule.setDoc(firebaseDocRef, appData);
+                    storageMode = 'cloud';
+                } catch (error) {
+                    console.warn('Firebase unavailable; switching to browser storage.', error);
+                    loadDataFromBrowser();
+                    loadingStatus.innerText = 'กำลังเปิดข้อมูลในเครื่อง...';
+                }
+            } else {
+                loadDataFromBrowser();
+            }
+
+            document.getElementById('cloudLoadingOverlay').classList.add('hidden');
+            document.getElementById('uiLayer').classList.remove('hidden');
+            initAppUI();
+        }
+
+        async function saveDataToCloud() {
+            try {
+                if (storageMode === 'cloud' && firebaseStore && firebaseDocRef) {
+                    await firebaseStore.setDoc(firebaseDocRef, appData);
+                } else {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+                }
+                return true;
+            } catch (error) {
+                console.error('Save error', error);
+                sysAlert('เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาลองใหม่');
+                return false;
+            }
+        }
+
+        startApp();
+
+        // ==========================================
+        // 3. UTILS & MODALS
+        // ==========================================
+        let audioContext;
+        function initAudio() { if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)(); }
+        
+        function playBeep(frequency, type = 'sine', duration = 0.1) {
+            if (!audioContext) return;
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioContext.destination);
+            osc.start();
+            osc.stop(audioContext.currentTime + duration);
+        }
+
+        function sysAlert(msg) {
+            const modal = document.getElementById('sysModal');
+            const box = document.getElementById('sysModalBox');
+            document.getElementById('sysModalText').innerHTML = msg;
+            document.getElementById('sysModalActions').innerHTML = `<button onclick="closeSysModal()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 font-bold">ตกลง</button>`;
+            modal.classList.remove('hidden');
+            setTimeout(() => box.classList.remove('scale-95'), 10);
+        }
+
+        function sysConfirm(msg, onConfirmCallback) {
+            const modal = document.getElementById('sysModal');
+            const box = document.getElementById('sysModalBox');
+            document.getElementById('sysModalText').innerHTML = msg;
+            
+            window._tempSysConfirm = () => { closeSysModal(); onConfirmCallback(); };
+            
+            document.getElementById('sysModalActions').innerHTML = `
+                <button onclick="closeSysModal()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500">ยกเลิก</button>
+                <button onclick="window._tempSysConfirm()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 font-bold">ยืนยัน</button>
+            `;
+            modal.classList.remove('hidden');
+            setTimeout(() => box.classList.remove('scale-95'), 10);
+        }
+
+        window.closeSysModal = () => {
+            document.getElementById('sysModalBox').classList.add('scale-95');
+            setTimeout(() => document.getElementById('sysModal').classList.add('hidden'), 150);
+        };
+
+
+        // ==========================================
+        // 4. GAME LOGIC
+        // ==========================================
+        function initAppUI() {
+            document.getElementById('startLogoIcon').className = `fa-solid ${appData.settings.logoIcon} text-red-500 mr-3`;
+            document.getElementById('startLogoText').innerText = appData.settings.logoText;
+            document.getElementById('gameLogoIcon').className = `fa-solid ${appData.settings.logoIcon} text-red-500 mr-2`;
+            document.getElementById('gameLogoText').innerText = appData.settings.logoText;
+
+            const selector = document.getElementById('setSelector');
+            selector.innerHTML = '';
+            appData.sets.forEach(set => {
+                const opt = document.createElement('option');
+                opt.value = set.id;
+                opt.innerText = `${set.name} (${set.questions.length} ข้อ)`;
+                selector.appendChild(opt);
+            });
+        }
+
+        window.goToHome = () => {
+            // หยุดเวลาและการทำงานของเกม
+            clearInterval(timerInterval);
+            clearTimeout(window.timeUpTimeout1);
+            clearTimeout(window.timeUpTimeout2);
+            clearTimeout(window.timeUpTimeout3);
+            isGameActive = false;
+            isPaused = false;
+            
+            // ซ่อนหน้าต่างและ UI ของเกมทั้งหมด
+            document.getElementById('gameBoard').classList.add('hidden', 'opacity-0');
+            document.getElementById('endScreen').classList.add('hidden');
+            document.getElementById('pauseOverlay').classList.add('hidden');
+            document.getElementById('resultOverlay').classList.add('hidden');
+            document.getElementById('resultMessage').classList.remove('scale-100');
+            document.getElementById('resultMessage').classList.add('scale-0');
+            
+            // ซ่อนปุ่มด้านบน
+            document.getElementById('pauseBtn').classList.add('hidden');
+            document.getElementById('backBtn').classList.add('hidden');
+            
+            // เปิดหน้าจอเริ่มเกมใหม่
+            document.getElementById('startScreen').classList.remove('hidden');
+        };
+
+        window.startGame = () => {
+            initAudio();
+            const selectedSetId = document.getElementById('setSelector').value;
+            const selectedSet = appData.sets.find(s => s.id === selectedSetId);
+            
+            if (!selectedSet || selectedSet.questions.length === 0) {
+                sysAlert("ชุดคำถามนี้ไม่มีข้อมูล กรุณาให้แอดมินเพิ่มคำถามก่อนครับ");
+                return;
+            }
+
+            // Shuffle Questions Logic (ระบบสุ่มข้อสอบ)
+            const isShuffle = document.getElementById('shuffleCheckbox').checked;
+            activeQuestions = [...selectedSet.questions];
+            if (isShuffle) {
+                activeQuestions.sort(() => Math.random() - 0.5); // สลับอาเรย์แบบสุ่ม
+            }
+
+            currentQuestionIndex = 0;
+            score = 0;
+            document.getElementById('scoreDisplay').innerText = score;
+            document.getElementById('totalQuestions').innerText = activeQuestions.length;
+            document.getElementById('finalTotal').innerText = activeQuestions.length;
+
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameBoard').classList.remove('hidden');
+            document.getElementById('backBtn').classList.remove('hidden');
+            
+            // คืนค่าสถานะปุ่มหยุดให้เป็นปกติด้วยวิธีที่ปลอดภัย
+            isPaused = false;
+            const elPauseBtn = document.getElementById('pauseBtn');
+            const elPauseIcon = document.getElementById('pauseIcon');
+            elPauseIcon.classList.remove('fa-play');
+            elPauseIcon.classList.add('fa-pause');
+            document.getElementById('pauseText').innerText = "หยุด";
+            elPauseBtn.classList.remove('bg-green-500', 'hover:bg-green-400', 'text-white');
+            elPauseBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-400', 'text-gray-900');
+            elPauseBtn.classList.remove('hidden');
+
+            setTimeout(() => document.getElementById('gameBoard').classList.remove('opacity-0'), 100);
+            
+            loadQuestion();
+        };
+
+        window.handleZoneClick = (side) => {
+            if (!isGameActive || isPaused) return; 
+            currentTrackedSide = side; 
+            playBeep(450, 'sine', 0.05);
+            
+            document.getElementById('leftZone').classList.remove('tracked-hover');
+            document.getElementById('rightZone').classList.remove('tracked-hover');
+            if (side === 'left') document.getElementById('leftZone').classList.add('tracked-hover');
+            if (side === 'right') document.getElementById('rightZone').classList.add('tracked-hover');
+        };
+
+        window.togglePause = () => {
+            if (!isGameActive) return; // ไม่อนุญาตให้กดตอนที่โชว์เฉลยคำตอบ (ป้องกันบัค)
+            const elPauseBtn = document.getElementById('pauseBtn');
+            const elPauseIcon = document.getElementById('pauseIcon');
+            const elPauseText = document.getElementById('pauseText');
+            const pauseOverlay = document.getElementById('pauseOverlay');
+            
+            isPaused = !isPaused;
+            if (isPaused) {
+                clearInterval(timerInterval); 
+                elPauseIcon.classList.remove('fa-pause');
+                elPauseIcon.classList.add('fa-play');
+                elPauseText.innerText = "เล่นต่อ";
+                
+                // สลับคลาสเพื่อแสดงสถานะสีเขียว (อย่างปลอดภัย)
+                elPauseBtn.classList.remove('bg-yellow-500', 'hover:bg-yellow-400', 'text-gray-900');
+                elPauseBtn.classList.add('bg-green-500', 'hover:bg-green-400', 'text-white');
+                
+                if(pauseOverlay) pauseOverlay.classList.remove('hidden');
+            } else {
+                startTimer(); 
+                elPauseIcon.classList.remove('fa-play');
+                elPauseIcon.classList.add('fa-pause');
+                elPauseText.innerText = "หยุด";
+                
+                // กลับมาเป็นสีเหลือง
+                elPauseBtn.classList.remove('bg-green-500', 'hover:bg-green-400', 'text-white');
+                elPauseBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-400', 'text-gray-900');
+                
+                if(pauseOverlay) pauseOverlay.classList.add('hidden');
+            }
+        };
+
+        function loadQuestion() {
+            const q = activeQuestions[currentQuestionIndex];
+            isGameActive = true; 
+            isPaused = false; 
+            timeLeft = 20; 
+            currentTrackedSide = null;
+            
+            // ยืนยันการเคลียร์สถานะ Pause UI ตอนเริ่มข้อใหม่
+            const elPauseBtn = document.getElementById('pauseBtn');
+            const elPauseIcon = document.getElementById('pauseIcon');
+            elPauseIcon.classList.remove('fa-play');
+            elPauseIcon.classList.add('fa-pause');
+            document.getElementById('pauseText').innerText = "หยุด";
+            elPauseBtn.classList.remove('bg-green-500', 'hover:bg-green-400', 'text-white');
+            elPauseBtn.classList.add('bg-yellow-500', 'hover:bg-yellow-400', 'text-gray-900');
+            document.getElementById('pauseOverlay').classList.add('hidden');
+
+            const elLeftZone = document.getElementById('leftZone');
+            const elRightZone = document.getElementById('rightZone');
+            elLeftZone.className = 'side-zone glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition';
+            elRightZone.className = 'side-zone glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition';
+            document.getElementById('timerContainer').classList.remove('timer-warning');
+            
+            document.getElementById('levelBadge').innerText = q.level;
+            document.getElementById('levelBadge').className = `${q.levelColor} px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold uppercase tracking-wider text-white shadow-md text-center leading-tight whitespace-nowrap`;
+            document.getElementById('questionNumber').innerText = currentQuestionIndex + 1;
+            document.getElementById('questionText').innerText = q.question;
+            document.getElementById('leftText').innerText = q.leftChoice;
+            document.getElementById('rightText').innerText = q.rightChoice;
+            document.getElementById('questionImage').src = q.image;
+
+            updateTimerUI();
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerUI();
+                if (timeLeft <= 3 && timeLeft > 0) {
+                    document.getElementById('timerContainer').classList.add('timer-warning');
+                    playBeep(400, 'square', 0.1);
+                }
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeUp(); 
+                }
+            }, 1000);
+        }
+
+        function updateTimerUI() {
+            document.getElementById('timerDisplay').innerText = timeLeft;
+            const percentage = (timeLeft / 20) * 100;
+            const elTimerBar = document.getElementById('timerBar');
+            elTimerBar.style.width = `${percentage}%`;
+            
+            if (timeLeft > 5) elTimerBar.className = "bg-green-400 h-full w-full transition-all duration-1000 ease-linear";
+            else if (timeLeft > 3) elTimerBar.className = "bg-yellow-400 h-full w-full transition-all duration-1000 ease-linear";
+            else elTimerBar.className = "bg-red-500 h-full w-full transition-all duration-1000 ease-linear";
+        }
+
+        function handleTimeUp() {
+            isGameActive = false; // บล็อกการกดเปลี่ยนคำตอบหรือปุ่มหยุดระหว่างเฉลย
+            document.getElementById('timerContainer').classList.remove('timer-warning');
+            const q = activeQuestions[currentQuestionIndex];
+            const finalAnswer = currentTrackedSide; 
+            const isCorrect = finalAnswer === q.correctSide;
+
+            const elLeftZone = document.getElementById('leftZone');
+            const elRightZone = document.getElementById('rightZone');
+
+            if (q.correctSide === 'left') {
+                elLeftZone.classList.add('correct-zone');
+                elRightZone.classList.add('wrong-zone', 'dimmed');
+            } else {
+                elRightZone.classList.add('correct-zone');
+                elLeftZone.classList.add('wrong-zone', 'dimmed');
+            }
+
+            // จัดการ Timeout อย่างปลอดภัย (เผื่อผู้ใช้กดย้อนกลับขณะกำลังนับถอยหลัง)
+            window.timeUpTimeout1 = setTimeout(() => {
+                const elResultOverlay = document.getElementById('resultOverlay');
+                const elResultMessage = document.getElementById('resultMessage');
+                
+                elResultOverlay.classList.remove('hidden');
+                elResultMessage.classList.remove('scale-0');
+                elResultMessage.classList.add('scale-100');
+
+                if (finalAnswer === null) {
+                    playBeep(200, 'sawtooth', 0.5);
+                    elResultMessage.innerHTML = '<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">หมดเวลา!<br><span class="text-3xl text-white">ไม่ได้เลือกคำตอบ</span></span>';
+                } else if (isCorrect) {
+                    score++;
+                    document.getElementById('scoreDisplay').innerText = score;
+                    playBeep(600, 'sine', 0.1); setTimeout(() => playBeep(800, 'sine', 0.2), 100);
+                    elResultMessage.innerHTML = '<span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">ถูกต้อง!</span><br><span class="text-3xl text-white block mt-4">+1 คะแนน</span>';
+                } else {
+                    playBeep(300, 'square', 0.3);
+                    elResultMessage.innerHTML = '<span class="text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]">ผิด!</span>';
+                }
+
+                window.timeUpTimeout2 = setTimeout(() => {
+                    elResultMessage.classList.remove('scale-100');
+                    elResultMessage.classList.add('scale-0');
+                    
+                    window.timeUpTimeout3 = setTimeout(() => {
+                        elResultOverlay.classList.add('hidden');
+                        currentQuestionIndex++;
+                        if (currentQuestionIndex < activeQuestions.length) loadQuestion();
+                        else {
+                            document.getElementById('gameBoard').classList.add('hidden');
+                            document.getElementById('endScreen').classList.remove('hidden');
+                            document.getElementById('finalScore').innerText = score;
+                            const percent = score / activeQuestions.length;
+                            const feedbackEl = document.getElementById('feedbackText');
+                            if (percent >= 0.8) feedbackEl.innerHTML = "ยอดเยี่ยม! ระดับปรมาจารย์ <i class='fa-solid fa-crown text-yellow-400'></i>";
+                            else if (percent >= 0.5) feedbackEl.innerText = "เก่งมาก! ทำได้ดีทีเดียว";
+                            else feedbackEl.innerText = "พยายามได้ดี! ลองเล่นอีกครั้งนะ";
+                        }
+                    }, 300);
+                }, 3000); 
+            }, 5000); 
+        }
+
+        // ==========================================
+        // 5. ADMIN SYSTEM & EXCEL LOGIC
+        // ==========================================
+        window.showAdminLogin = () => {
+            document.getElementById('adminLoginModal').classList.remove('hidden');
+            document.getElementById('adminPin').value = '';
+        };
+
+        window.checkAdminLogin = () => {
+            const pin = document.getElementById('adminPin').value;
+            if (pin === ADMIN_PIN) {
+                document.getElementById('adminLoginModal').classList.add('hidden');
+                document.getElementById('loginError').classList.add('hidden');
+                document.getElementById('adminDashboard').classList.remove('hidden');
+                document.getElementById('adminLogoText').value = appData.settings.logoText;
+                document.getElementById('adminLogoIcon').value = appData.settings.logoIcon;
+                renderAdminSets();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        };
+
+        window.closeAdmin = () => {
+            document.getElementById('adminDashboard').classList.add('hidden');
+            initAppUI(); 
+        };
+
+        window.saveGlobalSettings = async () => {
+            appData.settings.logoText = document.getElementById('adminLogoText').value;
+            appData.settings.logoIcon = document.getElementById('adminLogoIcon').value;
+            const saved = await saveDataToCloud();
+            if (saved) {
+                const destination = storageMode === 'cloud' ? 'ระบบออนไลน์' : 'เบราว์เซอร์เครื่องนี้';
+                sysAlert(`บันทึกการตั้งค่าใน${destination}สำเร็จ`);
+                initAppUI();
+            }
+        };
+
+        function renderAdminSets() {
+            const list = document.getElementById('adminSetsList');
+            list.innerHTML = '';
+            appData.sets.forEach(set => {
+                const div = document.createElement('div');
+                div.className = "flex flex-col md:flex-row justify-between md:items-center gap-4 bg-gray-900 p-4 rounded-xl border border-gray-700";
+                div.innerHTML = `
+                    <div>
+                        <h3 class="text-lg font-bold text-white">${set.name}</h3>
+                        <p class="text-sm text-gray-400">จำนวน: ${set.questions.length} ข้อ</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="openSetEditor('${set.id}')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold text-sm shadow"><i class="fa-solid fa-pen mr-1"></i> จัดการคำถาม</button>
+                        <button onclick="deleteSet('${set.id}')" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm shadow"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        window.createNewSet = async () => {
+            const newId = 'set_' + Date.now();
+            appData.sets.push({ id: newId, name: "หมวดหมู่ใหม่", questions: [] });
+            await saveDataToCloud();
+            renderAdminSets();
+        };
+
+        window.deleteSet = (id) => {
+            sysConfirm("ยืนยันการลบชุดคำถามนี้? (ลบแล้วกู้คืนไม่ได้)", async () => {
+                appData.sets = appData.sets.filter(s => s.id !== id);
+                await saveDataToCloud();
+                renderAdminSets();
+            });
+        };
+
+        window.openSetEditor = (setId) => {
+            editingSetId = setId;
+            const set = appData.sets.find(s => s.id === setId);
+            document.getElementById('editSetName').value = set.name;
+            
+            document.getElementById('editSetName').onchange = async (e) => {
+                set.name = e.target.value;
+                await saveDataToCloud();
+            };
+            document.getElementById('setEditorModal').classList.remove('hidden');
+            renderAdminQuestions();
+        };
+
+        window.closeSetEditor = () => {
+            document.getElementById('setEditorModal').classList.add('hidden');
+            renderAdminSets(); 
+        };
+
+        function renderAdminQuestions() {
+            const set = appData.sets.find(s => s.id === editingSetId);
+            const list = document.getElementById('adminQuestionsList');
+            list.innerHTML = '';
+
+            if (set.questions.length === 0) {
+                list.innerHTML = `<div class="text-center text-gray-500 py-10 border-2 border-dashed border-gray-600 rounded-xl bg-gray-900 bg-opacity-50">ยังไม่มีคำถามในชุดนี้ กด "นำเข้าจาก Excel" หรือ "เพิ่มข้อเดียว"</div>`;
+                return;
+            }
+
+            set.questions.forEach((q, index) => {
+                const div = document.createElement('div');
+                div.className = "bg-gray-900 p-5 rounded-xl border border-gray-700 flex flex-col lg:flex-row gap-6 shadow-md";
+                div.innerHTML = `
+                    <div class="flex-grow space-y-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold">ข้อที่ ${index + 1}</span>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-xs mb-1">โจทย์คำถาม</label>
+                            <input type="text" value="${q.question}" onchange="updateQuestion(${index}, 'question', this.value)" class="w-full p-2 bg-gray-800 text-white border border-gray-600 rounded focus:border-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 text-xs mb-1">URL รูปภาพ</label>
+                            <input type="text" value="${q.image}" onchange="updateQuestion(${index}, 'image', this.value)" class="w-full p-2 bg-gray-800 text-white border border-gray-600 rounded text-sm font-mono focus:border-blue-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 border-l-4 border-l-blue-500">
+                                <label class="block text-blue-400 text-xs font-bold mb-1">ตัวเลือก (ซ้าย)</label>
+                                <input type="text" value="${q.leftChoice}" onchange="updateQuestion(${index}, 'leftChoice', this.value)" class="w-full p-2 bg-gray-900 text-white border border-gray-600 rounded outline-none">
+                            </div>
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 border-l-4 border-l-purple-500">
+                                <label class="block text-purple-400 text-xs font-bold mb-1">ตัวเลือก (ขวา)</label>
+                                <input type="text" value="${q.rightChoice}" onchange="updateQuestion(${index}, 'rightChoice', this.value)" class="w-full p-2 bg-gray-900 text-white border border-gray-600 rounded outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">เฉลยคำตอบ</label>
+                                <select onchange="updateQuestion(${index}, 'correctSide', this.value)" class="w-full p-2 bg-gray-800 text-white border border-gray-600 rounded outline-none">
+                                    <option value="left" ${q.correctSide === 'left' ? 'selected' : ''}>ฝั่งซ้าย</option>
+                                    <option value="right" ${q.correctSide === 'right' ? 'selected' : ''}>ฝั่งขวา</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-400 text-xs mb-1">ป้ายกำกับระดับความยาก</label>
+                                <select onchange="updateQuestionLevel(${index}, this.value)" class="w-full p-2 bg-gray-800 text-white border border-gray-600 rounded outline-none">
+                                    <option value="easy" ${q.levelColor.includes('green') ? 'selected' : ''}>ง่าย (ป้ายเขียว)</option>
+                                    <option value="medium" ${q.levelColor.includes('yellow') ? 'selected' : ''}>ปานกลาง (ป้ายเหลือง)</option>
+                                    <option value="hard" ${q.levelColor.includes('red') ? 'selected' : ''}>ยาก (ป้ายแดง)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex lg:flex-col justify-end lg:justify-start gap-4 items-center lg:items-end min-w-[120px]">
+                        <div class="w-24 h-24 rounded-lg overflow-hidden border-2 border-gray-600 bg-black hidden md:block flex-shrink-0">
+                            <img src="${q.image}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/100/1e293b/38bdf8?text=Img'">
+                        </div>
+                        <button onclick="deleteQuestion(${index})" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm shadow w-full md:w-auto"><i class="fa-solid fa-trash mr-1"></i> ลบ</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        window.updateQuestion = async (index, field, value) => {
+            const set = appData.sets.find(s => s.id === editingSetId);
+            set.questions[index][field] = value;
+            await saveDataToCloud();
+        };
+
+        window.updateQuestionLevel = async (index, difficulty) => {
+            const set = appData.sets.find(s => s.id === editingSetId);
+            if (difficulty === 'easy') { set.questions[index].level = "ง่าย (Easy)"; set.questions[index].levelColor = "bg-green-600"; }
+            else if (difficulty === 'medium') { set.questions[index].level = "ปานกลาง (Medium)"; set.questions[index].levelColor = "bg-yellow-600"; }
+            else { set.questions[index].level = "ยาก (Hard)"; set.questions[index].levelColor = "bg-red-600"; }
+            await saveDataToCloud();
+        };
+
+        window.addNewQuestionToSet = async () => {
+            const set = appData.sets.find(s => s.id === editingSetId);
+            set.questions.unshift({
+                level: "ง่าย (Easy)", levelColor: "bg-green-600",
+                question: "โจทย์คำถามใหม่?",
+                image: "https://placehold.co/600x400/1e293b/38bdf8?text=New+Question",
+                leftChoice: "ตัวเลือกซ้าย", rightChoice: "ตัวเลือกขวา", correctSide: "left"
+            });
+            await saveDataToCloud();
+            renderAdminQuestions();
+        };
+
+        window.deleteQuestion = (index) => {
+            sysConfirm("ยืนยันการลบข้อนี้?", async () => {
+                const set = appData.sets.find(s => s.id === editingSetId);
+                set.questions.splice(index, 1);
+                await saveDataToCloud();
+                renderAdminQuestions();
+            });
+        };
+
+        // --- EXCEL LOGIC ---
+        window.triggerExcelUpload = () => { document.getElementById('excelInput').click(); };
+
+        window.downloadExcelTemplate = () => {
+            const ws_data = [
+                ["คำถาม (Question)", "URL รูปภาพ (Image URL)", "ตัวเลือกซ้าย (Left Choice)", "ตัวเลือกขวา (Right Choice)", "คำตอบที่ถูก (left หรือ right)", "ความยาก (easy, medium, hard)"],
+                ["อวัยวะใดสูบฉีดเลือด?", "https://placehold.co/600x400?text=Heart", "หัวใจ", "ปอด", "left", "easy"],
+                ["อวัยวะใดผลิตน้ำย่อย?", "https://placehold.co/600x400?text=Stomach", "ลำไส้", "กระเพาะ", "right", "medium"]
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "QuestionsTemplate");
+            XLSX.writeFile(wb, "MedQuiz_Template.xlsx");
+        };
+
+        window.handleExcelUpload = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    const set = appData.sets.find(s => s.id === editingSetId);
+                    let importedCount = 0;
+
+                    json.forEach(row => {
+                        // Extracting values loosely based on expected header words to handle different variations
+                        const rowKeys = Object.keys(row);
+                        const getKey = (keywords) => rowKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+                        
+                        const qKey = getKey(['คำถาม', 'question']);
+                        const imgKey = getKey(['รูป', 'image', 'url']);
+                        const leftKey = getKey(['ซ้าย', 'left']);
+                        const rightKey = getKey(['ขวา', 'right']);
+                        const ansKey = getKey(['ตอบ', 'ans', 'correct']);
+                        const lvlKey = getKey(['ยาก', 'level', 'diff']);
+
+                        const q = row[qKey];
+                        if (q) {
+                            const img = row[imgKey] || "https://placehold.co/600x400/1e293b/38bdf8?text=Image";
+                            const left = row[leftKey] || "ตัวเลือกซ้าย";
+                            const right = row[rightKey] || "ตัวเลือกขวา";
+                            const rawAns = (row[ansKey] || "left").toString().toLowerCase();
+                            const ans = rawAns.includes('right') || rawAns.includes('ขวา') ? 'right' : 'left';
+                            
+                            const rawLvl = (row[lvlKey] || "easy").toString().toLowerCase();
+                            let levelTxt = "ง่าย (Easy)"; let levelColor = "bg-green-600";
+                            if(rawLvl.includes('med') || rawLvl.includes('ปาน')) { levelTxt="ปานกลาง (Medium)"; levelColor="bg-yellow-600"; }
+                            if(rawLvl.includes('hard') || rawLvl.includes('ยาก')) { levelTxt="ยาก (Hard)"; levelColor="bg-red-600"; }
+
+                            set.questions.push({
+                                question: q, image: img, leftChoice: left, rightChoice: right,
+                                correctSide: ans, level: levelTxt, levelColor: levelColor
+                            });
+                            importedCount++;
+                        }
+                    });
+
+                    if (importedCount > 0) {
+                        await saveDataToCloud();
+                        renderAdminQuestions();
+                        sysAlert(`อัปโหลดสำเร็จ! นำเข้าคำถามได้ทั้งหมด ${importedCount} ข้อ`);
+                    } else {
+                        sysAlert("ไม่พบข้อมูลคำถามในไฟล์ที่อัปโหลด กรุณาตรวจสอบให้แน่ใจว่าใช้เทมเพลตที่ถูกต้อง");
+                    }
+                } catch (error) {
+                    sysAlert("เกิดข้อผิดพลาดในการอ่านไฟล์ Excel");
+                    console.error(error);
+                }
+            };
+            reader.readAsBinaryString(file);
+            e.target.value = ''; // Reset input
+        };
+
+    </script>
+</body>
+</html>
