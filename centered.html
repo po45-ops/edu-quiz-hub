@@ -357,9 +357,12 @@
                         <!-- Options populated via JS -->
                     </select>
 
-                    <label class="flex items-center gap-3 cursor-pointer hover:bg-blue-900/40 p-2 rounded-xl transition w-full md:w-max">
-                        <input type="checkbox" id="shuffleCheckbox" class="w-6 h-6 rounded accent-violet-500 cursor-pointer shrink-0">
-                        <span class="text-white font-semibold text-base md:text-lg">สุ่มลำดับข้อสอบ (Shuffle Mode)</span>
+                    <label class="flex items-center gap-3 cursor-pointer hover:bg-blue-900/40 p-2 rounded-xl transition w-full">
+                        <input type="checkbox" id="shuffleCheckbox" class="w-6 h-6 rounded accent-violet-500 cursor-pointer shrink-0" checked>
+                        <span class="flex flex-col">
+                            <span class="text-white font-semibold text-base md:text-lg">สุ่มข้อแบบอัลกอริทึม</span>
+                            <span class="text-xs md:text-sm text-blue-200 font-normal">5 ข้อง่ายก่อน • จากนั้นคละทุกระดับ • ไม่ซ้ำข้อ</span>
+                        </span>
                     </label>
                 </div>
 
@@ -898,6 +901,158 @@
             });
         }
 
+        function shuffleArray(items) {
+            const shuffled = [...items];
+            for (let index = shuffled.length - 1; index > 0; index--) {
+                const randomIndex = Math.floor(Math.random() * (index + 1));
+                [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+            }
+            return shuffled;
+        }
+
+        function getQuestionDifficulty(question) {
+            const marker = `${question.level || ''} ${question.levelColor || ''}`.toLowerCase();
+            if (marker.includes('green') || marker.includes('easy') || marker.includes('ง่าย')) return 'easy';
+            if (marker.includes('red') || marker.includes('hard') || marker.includes('ยาก')) return 'hard';
+            return 'medium';
+        }
+
+        function getUniqueQuestions(questions) {
+            const seen = new Set();
+            return questions.filter(question => {
+                const key = [
+                    question.question,
+                    question.leftChoice,
+                    question.rightChoice,
+                    question.image
+                ].join('|');
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        }
+
+        function hasDifficultyRun(candidate, maxRun = 2) {
+            let lastDifficulty = null;
+            let runLength = 0;
+            for (const question of candidate) {
+                const difficulty = getQuestionDifficulty(question);
+                if (difficulty === lastDifficulty) runLength++;
+                else {
+                    lastDifficulty = difficulty;
+                    runLength = 1;
+                }
+                if (runLength > maxRun) return true;
+            }
+            return false;
+        }
+
+        function buildAdaptiveQuestionOrder(questions) {
+            const uniqueQuestions = getUniqueQuestions(questions).map(question => ({ ...question }));
+            const easyQuestions = shuffleArray(uniqueQuestions.filter(question => getQuestionDifficulty(question) === 'easy'));
+            const openingQuestions = easyQuestions.slice(0, Math.min(5, easyQuestions.length));
+            const openingSet = new Set(openingQuestions);
+            const remainingQuestions = uniqueQuestions.filter(question => !openingSet.has(question));
+
+            // สุ่มซ้ำเฉพาะ "ลำดับ" จนได้การคละระดับที่ไม่เรียงเป็นแพตเทิร์นยาว
+            for (let attempt = 0; attempt < 400; attempt++) {
+                const candidate = shuffleArray(remainingQuestions);
+                if (candidate.length && getQuestionDifficulty(candidate[0]) === 'easy') continue;
+                if (!hasDifficultyRun(candidate, 2)) return [...openingQuestions, ...candidate];
+            }
+
+            // ทางสำรองแบบถ่วงน้ำหนัก หากชุดคำถามมีสัดส่วนระดับที่ต่างจากชุดมาตรฐานมาก
+            const buckets = {
+                easy: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'easy')),
+                medium: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'medium')),
+                hard: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'hard'))
+            };
+            const mixedQuestions = [];
+            let lastDifficulty = 'easy';
+            let runLength = openingQuestions.length;
+
+            while (Object.values(buckets).some(bucket => bucket.length)) {
+                let available = Object.keys(buckets).filter(difficulty => buckets[difficulty].length);
+                if (runLength >= 2 && available.length > 1) {
+                    available = available.filter(difficulty => difficulty !== lastDifficulty);
+                }
+                available.sort((a, b) => buckets[b].length - buckets[a].length || Math.random() - 0.5);
+                const chosenDifficulty = available[0];
+                mixedQuestions.push(buckets[chosenDifficulty].pop());
+                if (chosenDifficulty === lastDifficulty) runLength++;
+                else {
+                    lastDifficulty = chosenDifficulty;
+                    runLength = 1;
+                }
+            }
+
+            return [...openingQuestions, ...mixedQuestions];
+        }
+
+        function hasPredictableSidePattern(sequence) {
+            let sameSideRun = 1;
+            let alternatingRun = 1;
+            for (let index = 1; index < sequence.length; index++) {
+                if (sequence[index] === sequence[index - 1]) {
+                    sameSideRun++;
+                    alternatingRun = 1;
+                } else {
+                    sameSideRun = 1;
+                    alternatingRun++;
+                }
+                if (sameSideRun > 3 || alternatingRun > 4) return true;
+            }
+            return false;
+        }
+
+        function buildBalancedSideSequence(length) {
+            const extraSide = Math.random() < 0.5 ? 'left' : 'right';
+            const leftCount = Math.floor(length / 2) + (length % 2 && extraSide === 'left' ? 1 : 0);
+            const rightCount = length - leftCount;
+            const sidePool = [
+                ...Array(leftCount).fill('left'),
+                ...Array(rightCount).fill('right')
+            ];
+
+            for (let attempt = 0; attempt < 600; attempt++) {
+                const candidate = shuffleArray(sidePool);
+                if (!hasPredictableSidePattern(candidate)) return candidate;
+            }
+
+            // ทางสำรอง: สร้างลำดับทีละตำแหน่งโดยคุมจำนวนและแพตเทิร์น
+            const remaining = { left: leftCount, right: rightCount };
+            const sequence = [];
+            while (sequence.length < length) {
+                let choices = ['left', 'right'].filter(side => remaining[side] > 0);
+                const lastThree = sequence.slice(-3);
+                if (lastThree.length === 3 && lastThree.every(side => side === lastThree[0]) && choices.length > 1) {
+                    choices = choices.filter(side => side !== lastThree[0]);
+                }
+                if (lastThree.length === 3 && lastThree[0] !== lastThree[1] && lastThree[1] !== lastThree[2] && choices.length > 1) {
+                    choices = choices.filter(side => side === lastThree[2]);
+                }
+                choices.sort((a, b) => remaining[b] - remaining[a] || Math.random() - 0.5);
+                const chosenSide = choices[0];
+                sequence.push(chosenSide);
+                remaining[chosenSide]--;
+            }
+            return sequence;
+        }
+
+        function randomizeAnswerSides(questions) {
+            const sideSequence = buildBalancedSideSequence(questions.length);
+            return questions.map((question, index) => {
+                const targetSide = sideSequence[index];
+                if (question.correctSide === targetSide) return { ...question };
+                return {
+                    ...question,
+                    leftChoice: question.rightChoice,
+                    rightChoice: question.leftChoice,
+                    correctSide: targetSide
+                };
+            });
+        }
+
         window.goToHome = () => {
             // หยุดเวลาและการทำงานของเกม
             clearInterval(timerInterval);
@@ -933,12 +1088,13 @@
                 return;
             }
 
-            // Shuffle Questions Logic (ระบบสุ่มข้อสอบ)
+            // Smart shuffle: 5 ข้อง่ายก่อน จากนั้นคละระดับโดยไม่ซ้ำข้อ
             const isShuffle = document.getElementById('shuffleCheckbox').checked;
-            activeQuestions = [...selectedSet.questions];
-            if (isShuffle) {
-                activeQuestions.sort(() => Math.random() - 0.5); // สลับอาเรย์แบบสุ่ม
-            }
+            const uniqueQuestions = getUniqueQuestions(selectedSet.questions).map(question => ({ ...question }));
+            activeQuestions = isShuffle ? buildAdaptiveQuestionOrder(uniqueQuestions) : uniqueQuestions;
+
+            // สุ่มตำแหน่งคำตอบใหม่ทุกเกม เพื่อไม่ให้เกิดแพตเทิร์นซ้าย-ขวาที่คาดเดาได้
+            activeQuestions = randomizeAnswerSides(activeQuestions);
 
             currentQuestionIndex = 0;
             score = 0;
