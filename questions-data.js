@@ -2,7 +2,8 @@
 window.MEDQUIZ_DEFAULT_DATA = {
   "settings": {
     "logoIcon": "fa-graduation-cap",
-    "logoText": "SciQuiz"
+    "logoText": "โรงเรียนไตรธารวิทยา",
+    "logoImage": "./assets/school-logo.svg"
   },
   "sets": [
     {
