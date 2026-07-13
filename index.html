@@ -975,6 +975,10 @@
             document.getElementById('rightZone').classList.remove('tracked-hover');
             if (side === 'left') document.getElementById('leftZone').classList.add('tracked-hover');
             if (side === 'right') document.getElementById('rightZone').classList.add('tracked-hover');
+
+            // เมื่อผู้เล่นกดเลือก ให้หยุดเวลาและเฉลยทันที
+            clearInterval(timerInterval);
+            handleTimeUp(true);
         };
 
         window.togglePause = () => {
@@ -1072,7 +1076,8 @@
             else elTimerBar.className = "bg-red-500 h-full w-full transition-all duration-1000 ease-linear";
         }
 
-        function handleTimeUp() {
+        function handleTimeUp(showResultImmediately = false) {
+            clearInterval(timerInterval);
             isGameActive = false; // บล็อกการกดเปลี่ยนคำตอบหรือปุ่มหยุดระหว่างเฉลย
             document.getElementById('timerContainer').classList.remove('timer-warning');
             const q = activeQuestions[currentQuestionIndex];
@@ -1091,6 +1096,7 @@
             }
 
             // จัดการ Timeout อย่างปลอดภัย (เผื่อผู้ใช้กดย้อนกลับขณะกำลังนับถอยหลัง)
+            const resultDelay = showResultImmediately ? 250 : 5000;
             window.timeUpTimeout1 = setTimeout(() => {
                 const elResultOverlay = document.getElementById('resultOverlay');
                 const elResultMessage = document.getElementById('resultMessage');
@@ -1132,7 +1138,7 @@
                         }
                     }, 300);
                 }, 3000); 
-            }, 5000); 
+            }, resultDelay); 
         }
 
         // ==========================================
