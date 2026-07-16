@@ -279,35 +279,79 @@
 
         /* VA camera mode */
         #gameBoard.va-mode {
-            grid-template-areas:
-                "camera camera camera"
-                "left-choice question right-choice";
-            grid-template-rows: minmax(210px, 34vh) minmax(0, 1fr);
-            max-height: none;
+            grid-template-areas: "left-choice question right-choice";
+            grid-template-rows: minmax(0, 1fr);
+            max-height: 700px;
+            isolation: isolate;
+            overflow: hidden !important;
+            border-radius: 28px;
+            background: #020617;
         }
 
         #gameBoard.va-mode #leftZone {
             grid-column: 1 / 2 !important;
-            grid-row: 2 !important;
+            grid-row: 1 !important;
         }
         #gameBoard.va-mode #centerZone {
             grid-column: 2 / 3 !important;
-            grid-row: 2 !important;
+            grid-row: 1 !important;
         }
         #gameBoard.va-mode #rightZone {
             grid-column: 3 / 4 !important;
-            grid-row: 2 !important;
+            grid-row: 1 !important;
         }
 
         #vaCameraPanel {
-            grid-area: camera;
-            position: relative;
-            min-height: 210px;
+            position: absolute;
+            inset: 0;
             overflow: hidden;
-            border: 3px solid rgba(34, 211, 238, 0.7);
-            border-radius: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 28px;
             background: #020617;
-            box-shadow: 0 0 30px rgba(34, 211, 238, 0.3);
+            box-shadow: inset 0 0 50px rgba(2, 6, 23, 0.5);
+        }
+
+        #gameBoard.va-mode #vaCameraPanel {
+            display: block !important;
+        }
+
+        #gameBoard.va-mode .side-zone,
+        #gameBoard.va-mode #centerZone {
+            position: relative;
+            z-index: 3;
+        }
+
+        #gameBoard.va-mode .side-zone {
+            backdrop-filter: none;
+            overflow: hidden;
+            border-color: rgba(255, 255, 255, 0.7);
+        }
+
+        #gameBoard.va-mode #leftZone {
+            background: linear-gradient(90deg, rgba(2, 6, 23, 0.12), rgba(2, 6, 23, 0.58)) !important;
+        }
+
+        #gameBoard.va-mode #rightZone {
+            background: linear-gradient(270deg, rgba(2, 6, 23, 0.12), rgba(2, 6, 23, 0.58)) !important;
+        }
+
+        #gameBoard.va-mode #centerZone {
+            background: rgba(15, 23, 42, 0.94) !important;
+            backdrop-filter: blur(12px);
+        }
+
+        #gameBoard.va-mode .side-zone > * {
+            z-index: 3;
+        }
+
+        #gameBoard.va-mode .side-zone::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            border-radius: inherit;
+            box-shadow: inset 0 0 60px rgba(2, 6, 23, 0.25);
         }
 
         #vaVideo,
@@ -341,6 +385,11 @@
         .va-half-label.left { left: 12px; }
         .va-half-label.right { right: 12px; }
         .va-count-number { font-size: 1.75rem; line-height: 1; }
+
+        #gameBoard.va-mode .va-half-label,
+        #gameBoard.va-mode #vaStatus {
+            display: none;
+        }
 
         #vaStatus {
             position: absolute;
@@ -378,17 +427,16 @@
         @media (max-width: 767px) {
             #gameBoard.va-mode {
                 grid-template-areas:
-                    "camera"
                     "question"
                     "left-choice"
                     "right-choice";
                 grid-template-columns: minmax(0, 1fr);
-                grid-template-rows: 230px auto auto auto;
+                grid-template-rows: auto minmax(300px, 1fr) minmax(300px, 1fr);
+                max-height: none;
             }
-            #gameBoard.va-mode #centerZone { grid-column: 1 !important; grid-row: 2 !important; }
-            #gameBoard.va-mode #leftZone { grid-column: 1 !important; grid-row: 3 !important; }
-            #gameBoard.va-mode #rightZone { grid-column: 1 !important; grid-row: 4 !important; }
-            #vaCameraPanel { min-height: 230px; }
+            #gameBoard.va-mode #centerZone { grid-column: 1 !important; grid-row: 1 !important; }
+            #gameBoard.va-mode #leftZone { grid-column: 1 !important; grid-row: 2 !important; }
+            #gameBoard.va-mode #rightZone { grid-column: 1 !important; grid-row: 3 !important; }
             .va-half-label { padding: 6px 10px; font-size: 0.8rem; }
             .va-count-number { font-size: 1.35rem; }
         }
