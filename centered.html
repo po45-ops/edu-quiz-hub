@@ -511,7 +511,7 @@
 
                 <p class="text-gray-100 text-sm md:text-base mb-5 relative z-[1] flex items-start md:items-center justify-center gap-3 text-left md:text-center">
                     <i class="fa-regular fa-clock text-xl text-blue-200 mt-0.5 md:mt-0"></i>
-                    <span><b class="text-yellow-300">กติกา:</b> มีเวลา <b class="text-yellow-300">20 วินาที</b> ในการอ่านคำถาม แล้วเลือกคำตอบ “ฝั่งซ้าย” หรือ “ฝั่งขวา” ให้ถูกต้อง</span>
+                    <span><b class="text-yellow-300">กติกา:</b> อ่านคำถามแล้วเลือกคำตอบ “ฝั่งซ้าย” หรือ “ฝั่งขวา” ภายในเวลาที่กำหนด <b class="text-yellow-300">แนะนำ 15 วินาที</b></span>
                 </p>
 
                 <!-- Category Selector & Shuffle -->
@@ -528,6 +528,15 @@
                             <span class="text-xs md:text-sm text-blue-200 font-normal">5 ข้อง่ายก่อน • จากนั้นคละทุกระดับ • ไม่ซ้ำข้อ</span>
                         </span>
                     </label>
+
+                    <div class="mt-4">
+                        <label for="timeLimitSelector" class="block text-blue-50 mb-2 font-semibold"><i class="fa-solid fa-stopwatch mr-2 text-yellow-300"></i>จังหวะเวลาแต่ละข้อ</label>
+                        <select id="timeLimitSelector" class="start-select w-full p-3 rounded-xl bg-slate-950 text-white border border-blue-300/50 focus:border-yellow-300 focus:ring-2 focus:ring-yellow-400/30 focus:outline-none cursor-pointer">
+                            <option value="10">⚡ 10 วินาที — เร็วเร้าใจ</option>
+                            <option value="15" selected>🎯 15 วินาที — กำลังสนุก (แนะนำ)</option>
+                            <option value="20">🌱 20 วินาที — เด็กเล็กหรือฝึกอ่าน</option>
+                        </select>
+                    </div>
 
                     <fieldset class="mt-4 border-t border-blue-300/20 pt-4">
                         <legend class="text-blue-50 font-semibold mb-2">รูปแบบการเล่น</legend>
@@ -627,7 +636,7 @@
                     <!-- Timer -->
                     <div id="timerContainer" class="w-full bg-black bg-opacity-80 rounded-2xl p-4 text-center border-2 border-gray-500 transition-all duration-300">
                         <div class="text-gray-300 text-sm mb-1 uppercase tracking-widest font-bold">เวลาตัดสินใจ (วินาที)</div>
-                        <div class="text-6xl font-black font-mono tracking-tighter text-white" id="timerDisplay">20</div>
+                        <div class="text-6xl font-black font-mono tracking-tighter text-white" id="timerDisplay">15</div>
                         <div class="w-full bg-gray-800 h-3 mt-3 rounded-full overflow-hidden border border-gray-600">
                             <div id="timerBar" class="bg-white h-full w-full transition-all duration-1000 ease-linear"></div>
                         </div>
@@ -890,7 +899,8 @@
 
         let currentQuestionIndex = 0;
         let score = 0;
-        let timeLeft = 20;
+        let questionTimeLimit = 15;
+        let timeLeft = questionTimeLimit;
         let timerInterval;
         let isGameActive = false;
         let isPaused = false;
@@ -1459,6 +1469,7 @@
             }
 
             playMode = document.querySelector('input[name="playMode"]:checked')?.value || 'manual';
+            questionTimeLimit = Number.parseInt(document.getElementById('timeLimitSelector').value, 10) || 15;
             const gameBoard = document.getElementById('gameBoard');
             const vaPanel = document.getElementById('vaCameraPanel');
             const leftCountBadge = document.getElementById('leftZoneCount');
@@ -1572,7 +1583,7 @@
             const q = activeQuestions[currentQuestionIndex];
             isGameActive = true; 
             isPaused = false; 
-            timeLeft = 20; 
+            timeLeft = questionTimeLimit;
             currentTrackedSide = null;
             if (playMode === 'va') setVACounts(vaCounts.left, vaCounts.right);
             
@@ -1622,7 +1633,7 @@
 
         function updateTimerUI() {
             document.getElementById('timerDisplay').innerText = timeLeft;
-            const percentage = (timeLeft / 20) * 100;
+            const percentage = (timeLeft / questionTimeLimit) * 100;
             const elTimerBar = document.getElementById('timerBar');
             elTimerBar.style.width = `${percentage}%`;
             
@@ -1656,7 +1667,7 @@
             }
 
             // จัดการ Timeout อย่างปลอดภัย (เผื่อผู้ใช้กดย้อนกลับขณะกำลังนับถอยหลัง)
-            const resultDelay = showResultImmediately ? 250 : 5000;
+            const resultDelay = showResultImmediately ? 250 : 900;
             window.timeUpTimeout1 = setTimeout(() => {
                 const elResultOverlay = document.getElementById('resultOverlay');
                 const elResultMessage = document.getElementById('resultMessage');
@@ -1698,7 +1709,7 @@
                             else feedbackEl.innerText = "พยายามได้ดี! ลองเล่นอีกครั้งนะ";
                         }
                     }, 300);
-                }, 3000); 
+                }, 2200);
             }, resultDelay); 
         }
 
