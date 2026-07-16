@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SciQuiz | เกมตอบคำถามวิทยาศาสตร์</title>
-    <meta name="description" content="เว็บเกมตอบคำถามวิทยาศาสตร์ 4 ระดับชั้น รวม 200 ข้อ พร้อมนำเข้าคำถามจาก Excel">
+    <meta name="description" content="เว็บเกมตอบคำถามวิทยาศาสตร์ 4 ระดับชั้น รวม 320 ข้อ พร้อมคำถามวิเคราะห์และนำเข้าคำถามจาก Excel">
     <meta name="theme-color" content="#0f172a">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="./config.js?v=pin-0000"></script>
     <script src="./questions-data.js"></script>
+    <script src="./questions-hard-additions.js?v=hard-120-v1"></script>
     
     <style>
         body {
@@ -948,6 +949,36 @@
             }
         }
 
+        // เพิ่มชุดคำถามเสริมให้ข้อมูลเดิมที่เคยบันทึกในเบราว์เซอร์/Firebase
+        // ใช้หมายเลขรุ่นเพื่อย้ายข้อมูลเพียงครั้งเดียว และยังแก้ไขหรือลบคำถามภายหลังได้ตามปกติ
+        function mergeBundledHardQuestions() {
+            const packVersion = 'hard-120-v1';
+            if (appData.settings?.questionPackVersion === packVersion) return false;
+
+            const additions = window.MEDQUIZ_HARD_ADDITIONS || {};
+            let changed = false;
+
+            appData.sets.forEach(set => {
+                const extraQuestions = additions[set.id] || [];
+                const existing = new Set(
+                    set.questions.map(item => String(item.question || '').trim())
+                );
+
+                extraQuestions.forEach(item => {
+                    const key = String(item.question || '').trim();
+                    if (key && !existing.has(key)) {
+                        set.questions.push({ ...item });
+                        existing.add(key);
+                        changed = true;
+                    }
+                });
+            });
+
+            appData.settings = appData.settings || {};
+            appData.settings.questionPackVersion = packVersion;
+            return true;
+        }
+
         function getFirebaseConfig() {
             let raw = window.MEDQUIZ_FIREBASE_CONFIG;
             if (!raw && typeof __firebase_config !== 'undefined') raw = __firebase_config;
@@ -995,6 +1026,9 @@
             } else {
                 loadDataFromBrowser();
             }
+
+            const questionPackUpdated = mergeBundledHardQuestions();
+            if (questionPackUpdated) await saveDataToCloud();
 
             document.getElementById('cloudLoadingOverlay').classList.add('hidden');
             document.getElementById('uiLayer').classList.remove('hidden');
