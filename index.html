@@ -277,6 +277,122 @@
         }
         .dimmed { opacity: 0.3; filter: grayscale(100%); }
 
+        /* VA camera mode */
+        #gameBoard.va-mode {
+            grid-template-areas:
+                "camera camera camera"
+                "left-choice question right-choice";
+            grid-template-rows: minmax(210px, 34vh) minmax(0, 1fr);
+            max-height: none;
+        }
+
+        #gameBoard.va-mode #leftZone {
+            grid-column: 1 / 2 !important;
+            grid-row: 2 !important;
+        }
+        #gameBoard.va-mode #centerZone {
+            grid-column: 2 / 3 !important;
+            grid-row: 2 !important;
+        }
+        #gameBoard.va-mode #rightZone {
+            grid-column: 3 / 4 !important;
+            grid-row: 2 !important;
+        }
+
+        #vaCameraPanel {
+            grid-area: camera;
+            position: relative;
+            min-height: 210px;
+            overflow: hidden;
+            border: 3px solid rgba(34, 211, 238, 0.7);
+            border-radius: 24px;
+            background: #020617;
+            box-shadow: 0 0 30px rgba(34, 211, 238, 0.3);
+        }
+
+        #vaVideo,
+        #vaCanvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #vaVideo { transform: scaleX(-1); }
+        #vaCanvas { z-index: 2; pointer-events: none; }
+
+        .va-half-label {
+            position: absolute;
+            z-index: 3;
+            top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 15px;
+            border-radius: 999px;
+            color: white;
+            font-weight: 800;
+            background: rgba(2, 6, 23, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            backdrop-filter: blur(8px);
+        }
+
+        .va-half-label.left { left: 12px; }
+        .va-half-label.right { right: 12px; }
+        .va-count-number { font-size: 1.75rem; line-height: 1; }
+
+        #vaStatus {
+            position: absolute;
+            z-index: 4;
+            left: 50%;
+            bottom: 10px;
+            transform: translateX(-50%);
+            max-width: calc(100% - 24px);
+            padding: 6px 14px;
+            border-radius: 999px;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+            white-space: nowrap;
+            background: rgba(2, 6, 23, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+
+        .zone-count-badge {
+            position: absolute;
+            top: 62px;
+            z-index: 4;
+            min-width: 88px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 800;
+            text-align: center;
+            background: rgba(2, 6, 23, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        @media (max-width: 767px) {
+            #gameBoard.va-mode {
+                grid-template-areas:
+                    "camera"
+                    "question"
+                    "left-choice"
+                    "right-choice";
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-rows: 230px auto auto auto;
+            }
+            #gameBoard.va-mode #centerZone { grid-column: 1 !important; grid-row: 2 !important; }
+            #gameBoard.va-mode #leftZone { grid-column: 1 !important; grid-row: 3 !important; }
+            #gameBoard.va-mode #rightZone { grid-column: 1 !important; grid-row: 4 !important; }
+            #vaCameraPanel { min-height: 230px; }
+            .va-half-label { padding: 6px 10px; font-size: 0.8rem; }
+            .va-count-number { font-size: 1.35rem; }
+        }
+
         @keyframes pulse-red {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); border-color: rgba(239, 68, 68, 1); }
             50% { box-shadow: 0 0 50px 20px rgba(239, 68, 68, 0.5); border-color: rgba(255, 0, 0, 1); background: rgba(239, 68, 68, 0.3); }
@@ -364,6 +480,21 @@
                             <span class="text-xs md:text-sm text-blue-200 font-normal">5 ข้อง่ายก่อน • จากนั้นคละทุกระดับ • ไม่ซ้ำข้อ</span>
                         </span>
                     </label>
+
+                    <fieldset class="mt-4 border-t border-blue-300/20 pt-4">
+                        <legend class="text-blue-50 font-semibold mb-2">รูปแบบการเล่น</legend>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label class="flex items-center gap-3 cursor-pointer rounded-xl border border-blue-300/30 bg-slate-950/70 p-3 hover:border-cyan-300 transition">
+                                <input type="radio" name="playMode" value="manual" class="w-5 h-5 accent-cyan-400" checked>
+                                <span><b class="text-white block">โหมดปกติ</b><small class="text-blue-200">กดเลือกซ้ายหรือขวา</small></span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer rounded-xl border border-fuchsia-300/40 bg-slate-950/70 p-3 hover:border-fuchsia-300 transition">
+                                <input type="radio" name="playMode" value="va" class="w-5 h-5 accent-fuchsia-400">
+                                <span><b class="text-white block"><i class="fa-solid fa-camera mr-1"></i> โหมด VA กล้อง</b><small class="text-violet-200">ยืนเลือกคำตอบและนับคน</small></span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-blue-200 mt-3"><i class="fa-solid fa-shield-halved mr-1"></i> ภาพจากกล้องประมวลผลในเครื่อง ไม่บันทึกและไม่ส่งขึ้นระบบ</p>
+                    </fieldset>
                 </div>
 
                 <div id="actionButtons" class="space-y-4">
@@ -404,11 +535,21 @@
                     <h2 class="text-5xl md:text-7xl font-black text-white drop-shadow-lg tracking-widest"><i class="fa-solid fa-pause mr-4 text-yellow-400"></i>เกมหยุดชั่วคราว</h2>
                 </div>
 
+                <!-- VA CAMERA: visible only when camera play mode is selected -->
+                <section id="vaCameraPanel" class="hidden" aria-label="กล้องตรวจจับผู้เล่นและแบ่งฝั่งคำตอบ">
+                    <video id="vaVideo" autoplay muted playsinline></video>
+                    <canvas id="vaCanvas"></canvas>
+                    <div class="va-half-label left"><i class="fa-solid fa-arrow-left text-cyan-300"></i> ฝั่งซ้าย <span id="vaLeftCount" class="va-count-number text-cyan-300">0</span></div>
+                    <div class="va-half-label right">ฝั่งขวา <span id="vaRightCount" class="va-count-number text-fuchsia-300">0</span> <i class="fa-solid fa-arrow-right text-fuchsia-300"></i></div>
+                    <div id="vaStatus">กำลังเตรียมระบบตรวจจับบุคคล…</div>
+                </section>
+
                 <!-- LEFT CHOICE -->
                 <div id="leftZone" onclick="handleZoneClick('left')" class="side-zone cursor-pointer glass-panel rounded-3xl p-6 flex flex-col items-center justify-between relative hover:bg-gray-800 transition min-h-[260px]">
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         <i class="fa-solid fa-arrow-left mr-2 text-blue-400"></i> ยืนฝั่งซ้าย
                     </div>
+                    <div id="leftZoneCount" class="zone-count-badge hidden">0 คน</div>
                     <div class="mt-12 text-center flex-grow flex flex-col justify-center w-full pointer-events-none">
                         <h2 id="leftText" class="text-4xl xl:text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] leading-tight break-words">ตัวเลือก A</h2>
                     </div>
@@ -450,6 +591,7 @@
                     <div class="absolute top-4 bg-black bg-opacity-80 px-6 py-2 rounded-full text-lg font-bold text-white border border-gray-500 shadow-lg pointer-events-none">
                         ยืนฝั่งขวา <i class="fa-solid fa-arrow-right ml-2 text-blue-400"></i>
                     </div>
+                    <div id="rightZoneCount" class="zone-count-badge hidden">0 คน</div>
                     <div class="mt-12 text-center flex-grow flex flex-col justify-center w-full pointer-events-none">
                         <h2 id="rightText" class="text-4xl xl:text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] leading-tight break-words">ตัวเลือก B</h2>
                     </div>
@@ -707,6 +849,13 @@
         let currentTrackedSide = null; 
         let activeQuestions = [];
         let editingSetId = null;
+        let playMode = 'manual';
+        let vaStream = null;
+        let vaPoseLandmarker = null;
+        let vaAnimationFrame = null;
+        let vaLastVideoTime = -1;
+        let vaLastDetectionAt = 0;
+        let vaCounts = { left: 0, right: 0 };
 
         // ตัวแปรสำหรับป้องกัน Timeout ค้างในระบบ
         window.timeUpTimeout1 = null;
@@ -829,6 +978,163 @@
             gain.connect(audioContext.destination);
             osc.start();
             osc.stop(audioContext.currentTime + duration);
+        }
+
+        function setVACounts(left, right) {
+            vaCounts = { left, right };
+            document.getElementById('vaLeftCount').innerText = left;
+            document.getElementById('vaRightCount').innerText = right;
+            document.getElementById('leftZoneCount').innerText = `${left} คน`;
+            document.getElementById('rightZoneCount').innerText = `${right} คน`;
+
+            if (!isGameActive || isPaused || playMode !== 'va') return;
+            currentTrackedSide = left === right ? null : (left > right ? 'left' : 'right');
+            document.getElementById('leftZone').classList.toggle('tracked-hover', currentTrackedSide === 'left');
+            document.getElementById('rightZone').classList.toggle('tracked-hover', currentTrackedSide === 'right');
+
+            const status = document.getElementById('vaStatus');
+            if (left + right === 0) status.innerText = 'ยังไม่พบบุคคล — กรุณายืนให้เห็นช่วงลำตัว';
+            else if (left === right) status.innerText = `คะแนนเสียงเท่ากัน ${left} : ${right}`;
+            else status.innerText = `ระบบเลือกฝั่ง${currentTrackedSide === 'left' ? 'ซ้าย' : 'ขวา'} (คนมากกว่า)`;
+        }
+
+        function drawVAResults(landmarksList) {
+            const video = document.getElementById('vaVideo');
+            const canvas = document.getElementById('vaCanvas');
+            if (!video.videoWidth || !video.videoHeight) return;
+
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = 'rgba(14, 165, 233, 0.12)';
+            ctx.fillRect(0, 0, width / 2, height);
+            ctx.fillStyle = 'rgba(168, 85, 247, 0.12)';
+            ctx.fillRect(width / 2, 0, width / 2, height);
+            ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+            ctx.lineWidth = Math.max(3, width / 320);
+            ctx.setLineDash([16, 12]);
+            ctx.beginPath();
+            ctx.moveTo(width / 2, 0);
+            ctx.lineTo(width / 2, height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            let left = 0;
+            let right = 0;
+            landmarksList.forEach((landmarks, index) => {
+                const visible = point => point && (point.visibility ?? 1) > 0.35;
+                const hips = [landmarks[23], landmarks[24]].filter(visible);
+                const shoulders = [landmarks[11], landmarks[12]].filter(visible);
+                const anchors = hips.length ? hips : shoulders;
+                if (!anchors.length) return;
+
+                const sourceX = anchors.reduce((sum, point) => sum + point.x, 0) / anchors.length;
+                const sourceY = anchors.reduce((sum, point) => sum + point.y, 0) / anchors.length;
+                const mirroredX = 1 - sourceX;
+                const side = mirroredX < 0.5 ? 'left' : 'right';
+                if (side === 'left') left++; else right++;
+
+                const x = mirroredX * width;
+                const y = sourceY * height;
+                const color = side === 'left' ? '#22d3ee' : '#d946ef';
+                ctx.fillStyle = color;
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(x, y, Math.max(13, width / 55), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = '#020617';
+                ctx.font = `bold ${Math.max(13, width / 55)}px Kanit`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(String(index + 1), x, y + 1);
+            });
+            setVACounts(left, right);
+        }
+
+        function runVADetection(now = performance.now()) {
+            if (!vaStream || !vaPoseLandmarker) return;
+            const video = document.getElementById('vaVideo');
+            if (video.readyState >= 2 && video.currentTime !== vaLastVideoTime && now - vaLastDetectionAt >= 180) {
+                vaLastVideoTime = video.currentTime;
+                vaLastDetectionAt = now;
+                try {
+                    const result = vaPoseLandmarker.detectForVideo(video, now);
+                    drawVAResults(result.landmarks || []);
+                } catch (error) {
+                    console.warn('VA detection frame skipped', error);
+                }
+            }
+            vaAnimationFrame = requestAnimationFrame(runVADetection);
+        }
+
+        async function startVACamera() {
+            const status = document.getElementById('vaStatus');
+            status.innerText = 'กำลังขออนุญาตเปิดกล้อง…';
+            try {
+                if (!navigator.mediaDevices?.getUserMedia) throw new Error('เบราว์เซอร์ไม่รองรับกล้อง');
+                vaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                const video = document.getElementById('vaVideo');
+                video.srcObject = vaStream;
+                await video.play();
+
+                status.innerText = 'กำลังโหลดระบบตรวจจับบุคคล…';
+                const visionTasks = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
+                const vision = await visionTasks.FilesetResolver.forVisionTasks(
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
+                );
+                const poseOptions = {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'
+                    },
+                    runningMode: 'VIDEO',
+                    numPoses: 12,
+                    minPoseDetectionConfidence: 0.35,
+                    minPosePresenceConfidence: 0.35,
+                    minTrackingConfidence: 0.35
+                };
+                try {
+                    vaPoseLandmarker = await visionTasks.PoseLandmarker.createFromOptions(vision, {
+                        ...poseOptions,
+                        baseOptions: { ...poseOptions.baseOptions, delegate: 'GPU' }
+                    });
+                } catch (gpuError) {
+                    console.warn('GPU mode unavailable; falling back to CPU', gpuError);
+                    vaPoseLandmarker = await visionTasks.PoseLandmarker.createFromOptions(vision, poseOptions);
+                }
+                status.innerText = 'พร้อมแล้ว — ยืนฝั่งซ้ายหรือขวา';
+                vaAnimationFrame = requestAnimationFrame(runVADetection);
+                return true;
+            } catch (error) {
+                console.error('VA camera error', error);
+                stopVACamera();
+                sysAlert('เปิดโหมดกล้องไม่ได้ กรุณาอนุญาตใช้กล้อง ตรวจสอบว่าเปิดเว็บผ่าน HTTPS และลองใหม่อีกครั้ง');
+                return false;
+            }
+        }
+
+        function stopVACamera() {
+            if (vaAnimationFrame) cancelAnimationFrame(vaAnimationFrame);
+            vaAnimationFrame = null;
+            if (vaStream) vaStream.getTracks().forEach(track => track.stop());
+            vaStream = null;
+            if (vaPoseLandmarker?.close) vaPoseLandmarker.close();
+            vaPoseLandmarker = null;
+            vaLastVideoTime = -1;
+            vaLastDetectionAt = 0;
+            const video = document.getElementById('vaVideo');
+            if (video) video.srcObject = null;
+            setVACounts(0, 0);
         }
 
         function sysAlert(msg) {
@@ -1061,9 +1367,15 @@
             clearTimeout(window.timeUpTimeout3);
             isGameActive = false;
             isPaused = false;
+            stopVACamera();
+            playMode = 'manual';
             
             // ซ่อนหน้าต่างและ UI ของเกมทั้งหมด
             document.getElementById('gameBoard').classList.add('hidden', 'opacity-0');
+            document.getElementById('gameBoard').classList.remove('va-mode');
+            document.getElementById('vaCameraPanel').classList.add('hidden');
+            document.getElementById('leftZoneCount').classList.add('hidden');
+            document.getElementById('rightZoneCount').classList.add('hidden');
             document.getElementById('endScreen').classList.add('hidden');
             document.getElementById('pauseOverlay').classList.add('hidden');
             document.getElementById('resultOverlay').classList.add('hidden');
@@ -1078,7 +1390,7 @@
             document.getElementById('startScreen').classList.remove('hidden');
         };
 
-        window.startGame = () => {
+        window.startGame = async () => {
             initAudio();
             const selectedSetId = document.getElementById('setSelector').value;
             const selectedSet = appData.sets.find(s => s.id === selectedSetId);
@@ -1086,6 +1398,33 @@
             if (!selectedSet || selectedSet.questions.length === 0) {
                 sysAlert("ชุดคำถามนี้ไม่มีข้อมูล กรุณาให้แอดมินเพิ่มคำถามก่อนครับ");
                 return;
+            }
+
+            playMode = document.querySelector('input[name="playMode"]:checked')?.value || 'manual';
+            const gameBoard = document.getElementById('gameBoard');
+            const vaPanel = document.getElementById('vaCameraPanel');
+            const leftCountBadge = document.getElementById('leftZoneCount');
+            const rightCountBadge = document.getElementById('rightZoneCount');
+
+            if (playMode === 'va') {
+                vaPanel.classList.remove('hidden');
+                gameBoard.classList.add('va-mode');
+                leftCountBadge.classList.remove('hidden');
+                rightCountBadge.classList.remove('hidden');
+                const cameraReady = await startVACamera();
+                if (!cameraReady) {
+                    vaPanel.classList.add('hidden');
+                    gameBoard.classList.remove('va-mode');
+                    leftCountBadge.classList.add('hidden');
+                    rightCountBadge.classList.add('hidden');
+                    return;
+                }
+            } else {
+                stopVACamera();
+                vaPanel.classList.add('hidden');
+                gameBoard.classList.remove('va-mode');
+                leftCountBadge.classList.add('hidden');
+                rightCountBadge.classList.add('hidden');
             }
 
             // Smart shuffle: 5 ข้อง่ายก่อน จากนั้นคละระดับโดยไม่ซ้ำข้อ
@@ -1124,6 +1463,7 @@
 
         window.handleZoneClick = (side) => {
             if (!isGameActive || isPaused) return; 
+            if (playMode === 'va') return;
             currentTrackedSide = side; 
             playBeep(450, 'sine', 0.05);
             
@@ -1176,6 +1516,7 @@
             isPaused = false; 
             timeLeft = 20; 
             currentTrackedSide = null;
+            if (playMode === 'va') setVACounts(vaCounts.left, vaCounts.right);
             
             // ยืนยันการเคลียร์สถานะ Pause UI ตอนเริ่มข้อใหม่
             const elPauseBtn = document.getElementById('pauseBtn');
@@ -1239,6 +1580,11 @@
             const q = activeQuestions[currentQuestionIndex];
             const finalAnswer = currentTrackedSide; 
             const isCorrect = finalAnswer === q.correctSide;
+            const finalCounts = { ...vaCounts };
+            const correctStudentCount = playMode === 'va' ? finalCounts[q.correctSide] : 0;
+            const vaSummary = playMode === 'va'
+                ? `<span class="text-2xl text-white block mt-4">ซ้าย ${finalCounts.left} คน • ขวา ${finalCounts.right} คน<br><span class="text-emerald-300">ตอบถูก ${correctStudentCount} คน</span></span>`
+                : '';
 
             const elLeftZone = document.getElementById('leftZone');
             const elRightZone = document.getElementById('rightZone');
@@ -1263,15 +1609,15 @@
 
                 if (finalAnswer === null) {
                     playBeep(200, 'sawtooth', 0.5);
-                    elResultMessage.innerHTML = '<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">หมดเวลา!<br><span class="text-3xl text-white">ไม่ได้เลือกคำตอบ</span></span>';
+                    elResultMessage.innerHTML = `<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">หมดเวลา!<br><span class="text-3xl text-white">${playMode === 'va' && finalCounts.left === finalCounts.right ? 'จำนวนคนสองฝั่งเท่ากัน' : 'ไม่ได้เลือกคำตอบ'}</span></span>${vaSummary}`;
                 } else if (isCorrect) {
                     score++;
                     document.getElementById('scoreDisplay').innerText = score;
                     playBeep(600, 'sine', 0.1); setTimeout(() => playBeep(800, 'sine', 0.2), 100);
-                    elResultMessage.innerHTML = '<span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">ถูกต้อง!</span><br><span class="text-3xl text-white block mt-4">+1 คะแนน</span>';
+                    elResultMessage.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">ถูกต้อง!</span><br><span class="text-3xl text-white block mt-4">+1 คะแนน</span>${vaSummary}`;
                 } else {
                     playBeep(300, 'square', 0.3);
-                    elResultMessage.innerHTML = '<span class="text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]">ผิด!</span>';
+                    elResultMessage.innerHTML = `<span class="text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]">ผิด!</span>${vaSummary}`;
                 }
 
                 window.timeUpTimeout2 = setTimeout(() => {
@@ -1283,6 +1629,7 @@
                         currentQuestionIndex++;
                         if (currentQuestionIndex < activeQuestions.length) loadQuestion();
                         else {
+                            stopVACamera();
                             document.getElementById('gameBoard').classList.add('hidden');
                             document.getElementById('endScreen').classList.remove('hidden');
                             document.getElementById('finalScore').innerText = score;
