@@ -1089,9 +1089,9 @@
                 await video.play();
 
                 status.innerText = 'กำลังโหลดระบบตรวจจับบุคคล…';
-                const visionTasks = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
+                const visionTasks = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs');
                 const vision = await visionTasks.FilesetResolver.forVisionTasks(
-                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm'
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
                 );
                 const poseOptions = {
                     baseOptions: {
@@ -1118,7 +1118,17 @@
             } catch (error) {
                 console.error('VA camera error', error);
                 stopVACamera();
-                sysAlert('เปิดโหมดกล้องไม่ได้ กรุณาอนุญาตใช้กล้อง ตรวจสอบว่าเปิดเว็บผ่าน HTTPS และลองใหม่อีกครั้ง');
+                let message = 'เปิดโหมดกล้องไม่ได้ กรุณาลองใหม่อีกครั้ง';
+                if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') {
+                    message = 'เว็บไซต์ยังไม่ได้รับอนุญาตใช้กล้อง กรุณากดไอคอนด้านซ้ายของแถบที่อยู่ เลือก “การตั้งค่าเว็บไซต์” แล้วตั้งค่ากล้องเป็น “อนุญาต” จากนั้นรีเฟรชหน้าเว็บ';
+                } else if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') {
+                    message = 'ไม่พบกล้องในเครื่อง กรุณาตรวจสอบว่ากล้องเชื่อมต่อและเปิดใช้งานอยู่';
+                } else if (error?.name === 'NotReadableError' || error?.name === 'TrackStartError') {
+                    message = 'กล้องกำลังถูกใช้งานโดยโปรแกรมอื่น กรุณาปิด Zoom, Meet หรือโปรแกรมกล้องอื่น แล้วลองใหม่';
+                } else {
+                    message = 'กล้องเปิดได้ แต่ระบบตรวจจับบุคคลโหลดไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต รีเฟรชหน้าเว็บ และลองใหม่';
+                }
+                sysAlert(message);
                 return false;
             }
         }
