@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="./config.js?v=pin-0000"></script>
     <script src="./questions-data.js"></script>
-    <script src="./questions-hard-additions.js?v=hard-120-v1"></script>
+    <script src="./questions-hard-additions.js?v=hard-120-v3-analysis"></script>
     
     <style>
         body {
@@ -952,7 +952,7 @@
         // เพิ่มชุดคำถามเสริมให้ข้อมูลเดิมที่เคยบันทึกในเบราว์เซอร์/Firebase
         // ใช้หมายเลขรุ่นเพื่อย้ายข้อมูลเพียงครั้งเดียว และยังแก้ไขหรือลบคำถามภายหลังได้ตามปกติ
         function mergeBundledHardQuestions() {
-            const packVersion = 'hard-120-v1';
+            const packVersion = 'hard-120-v3-analysis';
             if (appData.settings?.questionPackVersion === packVersion) return false;
 
             const additions = window.MEDQUIZ_HARD_ADDITIONS || {};
@@ -960,15 +960,41 @@
 
             appData.sets.forEach(set => {
                 const extraQuestions = additions[set.id] || [];
-                const existing = new Set(
-                    set.questions.map(item => String(item.question || '').trim())
+                const existingByQuestion = new Map(
+                    set.questions.map((item, index) => [String(item.question || '').trim(), index])
+                );
+                const existingByBundleId = new Map(
+                    set.questions
+                        .map((item, index) => [String(item.bundleQuestionId || '').trim(), index])
+                        .filter(([id]) => id)
                 );
 
                 extraQuestions.forEach(item => {
                     const key = String(item.question || '').trim();
-                    if (key && !existing.has(key)) {
+                    if (!key) return;
+                    const bundleId = String(item.bundleQuestionId || '').trim();
+                    const legacyKey = String(item.legacyQuestion || '').trim();
+                    const matchedIndex = (
+                        (bundleId && existingByBundleId.has(bundleId)) ? existingByBundleId.get(bundleId) :
+                        existingByQuestion.has(key) ? existingByQuestion.get(key) :
+                        (legacyKey && existingByQuestion.has(legacyKey)) ? existingByQuestion.get(legacyKey) :
+                        null
+                    );
+
+                    if (matchedIndex !== null) {
+                        const current = set.questions[matchedIndex];
+                        const updated = { ...current, ...item };
+                        if (JSON.stringify(current) !== JSON.stringify(updated)) {
+                            set.questions[matchedIndex] = updated;
+                            changed = true;
+                        }
+                        existingByQuestion.set(key, matchedIndex);
+                        if (bundleId) existingByBundleId.set(bundleId, matchedIndex);
+                    } else {
                         set.questions.push({ ...item });
-                        existing.add(key);
+                        const newIndex = set.questions.length - 1;
+                        existingByQuestion.set(key, newIndex);
+                        if (bundleId) existingByBundleId.set(bundleId, newIndex);
                         changed = true;
                     }
                 });
