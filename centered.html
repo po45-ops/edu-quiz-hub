@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="./config.js?v=pin-0000"></script>
     <script src="./questions-data.js"></script>
-    <script src="./questions-hard-additions.js?v=hard-120-v4-balanced"></script>
+    <script src="./questions-hard-additions.js?v=hard-120-v5-short-verified"></script>
     
     <style>
         body {
@@ -1275,7 +1275,7 @@
                         <input type="checkbox" id="shuffleCheckbox" class="w-6 h-6 rounded accent-violet-500 cursor-pointer shrink-0" checked>
                         <span class="flex flex-col">
                             <span class="text-white font-semibold text-base md:text-lg">สุ่มข้อแบบอัลกอริทึม</span>
-                            <span class="text-xs md:text-sm text-blue-200 font-normal">50 ข้อ/เกม • ง่าย 15 • ปานกลาง 15 • ยาก 20 • ไม่ซ้ำข้อ</span>
+                            <span class="text-xs md:text-sm text-blue-200 font-normal">ข้อ 1–5 ง่าย • ข้อ 6–50 สุ่มคละ • รวม 15/15/20 • ไม่ซ้ำ</span>
                         </span>
                     </label>
 
@@ -1709,11 +1709,23 @@
         // เพิ่มชุดคำถามเสริมให้ข้อมูลเดิมที่เคยบันทึกในเบราว์เซอร์/Firebase
         // ใช้หมายเลขรุ่นเพื่อย้ายข้อมูลเพียงครั้งเดียว และยังแก้ไขหรือลบคำถามภายหลังได้ตามปกติ
         function mergeBundledHardQuestions() {
-            const packVersion = 'hard-120-v4-balanced';
-            if (appData.settings?.questionPackVersion === packVersion) return false;
+            const packVersion = 'hard-120-v5-short-verified';
+            const basePromptRevisions = window.MEDQUIZ_BASE_PROMPT_REVISIONS || {};
+            let changed = false;
+
+            appData.sets.forEach(set => {
+                const revisions = basePromptRevisions[set.id] || {};
+                set.questions.forEach(question => {
+                    const revisedPrompt = revisions[String(question.question || '').trim()];
+                    if (!revisedPrompt || revisedPrompt === question.question) return;
+                    question.question = revisedPrompt;
+                    changed = true;
+                });
+            });
+
+            if (appData.settings?.questionPackVersion === packVersion) return changed;
 
             const additions = window.MEDQUIZ_HARD_ADDITIONS || {};
-            let changed = false;
 
             appData.sets.forEach(set => {
                 const extraQuestions = additions[set.id] || [];
@@ -2406,11 +2418,24 @@
                 selected.push(...selectDifficultyBucket(remaining, roundLength - selected.length, shouldShuffle));
             }
 
+            // เปิดเกมด้วยข้อง่าย 5 ข้อเพื่อให้นักเรียนเข้าใจกติกาและเกิดความมั่นใจ
+            // จากข้อ 6 จึงสุ่มคละตามสัดส่วนเดิม โดยยังไม่ทำคำถามซ้ำในรอบเดียวกัน
+            const easySelected = selected.filter(question => getQuestionDifficulty(question) === 'easy');
+            const openingCount = Math.min(5, easySelected.length);
+            const openingQuestions = (
+                shouldShuffle ? shuffleArray(easySelected) : easySelected
+            ).slice(0, openingCount);
+            const openingSet = new Set(openingQuestions);
+            const remainingQuestions = selected.filter(question => !openingSet.has(question));
+
             if (!shouldShuffle) {
-                const selectedSet = new Set(selected);
-                return uniqueQuestions.filter(question => selectedSet.has(question));
+                const remainingSet = new Set(remainingQuestions);
+                return [
+                    ...openingQuestions,
+                    ...uniqueQuestions.filter(question => remainingSet.has(question))
+                ];
             }
-            return mixDifficultyQuestions(selected);
+            return [...openingQuestions, ...mixDifficultyQuestions(remainingQuestions)];
         }
 
         function hasPredictableSidePattern(sequence) {
