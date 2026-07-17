@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="./config.js?v=pin-0000"></script>
     <script src="./questions-data.js"></script>
-    <script src="./questions-hard-additions.js?v=hard-120-v3-analysis"></script>
+    <script src="./questions-hard-additions.js?v=hard-120-v4-balanced"></script>
     
     <style>
         body {
@@ -1701,7 +1701,7 @@
         // เพิ่มชุดคำถามเสริมให้ข้อมูลเดิมที่เคยบันทึกในเบราว์เซอร์/Firebase
         // ใช้หมายเลขรุ่นเพื่อย้ายข้อมูลเพียงครั้งเดียว และยังแก้ไขหรือลบคำถามภายหลังได้ตามปกติ
         function mergeBundledHardQuestions() {
-            const packVersion = 'hard-120-v3-analysis';
+            const packVersion = 'hard-120-v4-balanced';
             if (appData.settings?.questionPackVersion === packVersion) return false;
 
             const additions = window.MEDQUIZ_HARD_ADDITIONS || {};
