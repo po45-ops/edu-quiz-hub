@@ -1275,7 +1275,7 @@
                         <input type="checkbox" id="shuffleCheckbox" class="w-6 h-6 rounded accent-violet-500 cursor-pointer shrink-0" checked>
                         <span class="flex flex-col">
                             <span class="text-white font-semibold text-base md:text-lg">สุ่มข้อแบบอัลกอริทึม</span>
-                            <span class="text-xs md:text-sm text-blue-200 font-normal">5 ข้อง่ายก่อน • จากนั้นคละทุกระดับ • ไม่ซ้ำข้อ</span>
+                            <span class="text-xs md:text-sm text-blue-200 font-normal">50 ข้อ/เกม • ง่าย 15 • ปานกลาง 15 • ยาก 20 • ไม่ซ้ำข้อ</span>
                         </span>
                     </label>
 
@@ -1297,7 +1297,7 @@
                             </label>
                             <label class="flex items-center gap-3 cursor-pointer rounded-xl border border-fuchsia-300/40 bg-slate-950/70 p-3 hover:border-fuchsia-300 transition">
                                 <input type="radio" name="playMode" value="va" class="w-5 h-5 accent-fuchsia-400">
-                                <span><b class="text-white block"><i class="fa-solid fa-camera mr-1"></i> โหมด VA กล้อง</b><small class="text-violet-200">ยืนเลือกคำตอบและนับคน</small></span>
+                                <span><b class="text-white block"><i class="fa-solid fa-camera mr-1"></i> โหมด AV กล้อง</b><small class="text-violet-200">นับใบหน้าและแยกผู้ตอบถูก–ผิดแต่ละฝั่ง</small></span>
                             </label>
                         </div>
                         <p class="text-xs text-blue-200 mt-3"><i class="fa-solid fa-shield-halved mr-1"></i> ภาพจากกล้องประมวลผลในเครื่อง ไม่บันทึกและไม่ส่งขึ้นระบบ</p>
@@ -1327,7 +1327,7 @@
                     <i class="fa-solid fa-arrow-left mr-2"></i><span class="button-label">ออก</span>
                 </button>
                 <div id="scorePill" class="text-xl font-bold text-white bg-gray-800 px-6 py-2 rounded-full border border-gray-600 shadow-[0_0_15px_rgba(255,255,255,0.2)]" aria-label="คะแนนปัจจุบัน">
-                    <span class="score-label">คะแนน:</span> <span id="scoreDisplay" class="text-emerald-400">0</span>
+                    <span id="scoreLabel" class="score-label">คะแนน:</span> <span id="scoreDisplay" class="text-emerald-400">0</span>
                 </div>
             </div>
         </header>
@@ -1348,7 +1348,7 @@
                     <canvas id="vaCanvas"></canvas>
                     <div class="va-half-label left"><i class="fa-solid fa-arrow-left text-cyan-300"></i> ฝั่งซ้าย <span id="vaLeftCount" class="va-count-number text-cyan-300">0</span></div>
                     <div class="va-half-label right">ฝั่งขวา <span id="vaRightCount" class="va-count-number text-fuchsia-300">0</span> <i class="fa-solid fa-arrow-right text-fuchsia-300"></i></div>
-                    <div id="vaStatus">กำลังเตรียมระบบตรวจจับบุคคล…</div>
+                    <div id="vaStatus">กำลังเตรียมระบบตรวจจับใบหน้าและศีรษะ…</div>
                 </section>
 
                 <!-- LEFT CHOICE -->
@@ -1370,6 +1370,7 @@
                     
                     <div class="w-full flex flex-nowrap justify-between items-center mb-4 gap-2">
                         <span id="levelBadge" class="bg-blue-600 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold uppercase tracking-wider text-white shadow-md text-center leading-tight whitespace-nowrap">ระดับ</span>
+                        <span id="vaCenterCount" class="hidden bg-yellow-500/90 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-bold text-slate-950 shadow-md text-center whitespace-nowrap">กลาง 0 คน</span>
                         <span class="text-gray-300 font-bold bg-black px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap">ข้อ <span id="questionNumber">1</span>/<span id="totalQuestions">10</span></span>
                     </div>
 
@@ -1420,7 +1421,7 @@
         <div id="endScreen" class="absolute inset-0 z-[60] flex items-center justify-center bg-gray-900 bg-opacity-95 hidden backdrop-blur-lg">
             <div id="endCard" class="glass-panel p-10 rounded-3xl text-center max-w-lg mx-4">
                 <h1 class="text-5xl font-bold mb-4 text-white">สรุปผลการทดสอบ</h1>
-                <p class="text-gray-300 text-xl mb-6">ความแม่นยำของคุณ</p>
+                <p id="finalScoreLabel" class="text-gray-300 text-xl mb-6">ความแม่นยำของคุณ</p>
                 <div class="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-8">
                     <span id="finalScore">0</span> / <span id="finalTotal">10</span>
                 </div>
@@ -1659,11 +1660,18 @@
         let editingSetId = null;
         let playMode = 'manual';
         let vaStream = null;
+        let vaFaceDetector = null;
         let vaPoseLandmarker = null;
         let vaAnimationFrame = null;
         let vaLastVideoTime = -1;
-        let vaLastDetectionAt = 0;
-        let vaCounts = { left: 0, right: 0 };
+        let vaLastFaceDetectionAt = 0;
+        let vaLastPoseDetectionAt = 0;
+        let vaLatestFaceHeads = [];
+        let vaLatestPoseHeads = [];
+        let vaHeadTracks = [];
+        let vaNextTrackId = 1;
+        let vaCounts = { left: 0, right: 0, center: 0, total: 0 };
+        let vaTotalAnswers = 0;
 
         // ตัวแปรสำหรับป้องกัน Timeout ค้างในระบบ
         window.timeUpTimeout1 = null;
@@ -1847,25 +1855,150 @@
             osc.stop(audioContext.currentTime + duration);
         }
 
-        function setVACounts(left, right) {
-            vaCounts = { left, right };
+        const VA_CENTER_MIN = 0.46;
+        const VA_CENTER_MAX = 0.54;
+
+        function clampVA(value, min = 0, max = 1) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function setVACounts(left, right, center = 0) {
+            const total = left + right + center;
+            vaCounts = { left, right, center, total };
             document.getElementById('vaLeftCount').innerText = left;
             document.getElementById('vaRightCount').innerText = right;
             document.getElementById('leftZoneCount').innerText = `${left} คน`;
             document.getElementById('rightZoneCount').innerText = `${right} คน`;
+            document.getElementById('vaCenterCount').innerText = `กลาง ${center} คน`;
 
             if (!isGameActive || isPaused || playMode !== 'va') return;
-            currentTrackedSide = left === right ? null : (left > right ? 'left' : 'right');
-            document.getElementById('leftZone').classList.toggle('tracked-hover', currentTrackedSide === 'left');
-            document.getElementById('rightZone').classList.toggle('tracked-hover', currentTrackedSide === 'right');
+            currentTrackedSide = null;
+            document.getElementById('leftZone').classList.toggle('tracked-hover', left > 0);
+            document.getElementById('rightZone').classList.toggle('tracked-hover', right > 0);
 
             const status = document.getElementById('vaStatus');
-            if (left + right === 0) status.innerText = 'ยังไม่พบบุคคล — กรุณายืนให้เห็นช่วงลำตัว';
-            else if (left === right) status.innerText = `คะแนนเสียงเท่ากัน ${left} : ${right}`;
-            else status.innerText = `ระบบเลือกฝั่ง${currentTrackedSide === 'left' ? 'ซ้าย' : 'ขวา'} (คนมากกว่า)`;
+            if (total === 0) {
+                status.innerText = 'ยังไม่พบใบหน้า — กรุณาหันหน้าเข้ากล้องและอย่าบังกัน';
+            } else {
+                const centerText = center ? ` • กลาง ${center} (ยังไม่เลือก)` : '';
+                status.innerText = `พบ ${total} คน • ซ้าย ${left} • ขวา ${right}${centerText}`;
+            }
         }
 
-        function drawVAResults(landmarksList) {
+        function getFaceHeadCandidates(detections, video) {
+            const width = video.videoWidth || 1;
+            const height = video.videoHeight || 1;
+            return (detections || []).map(detection => {
+                const keypoints = (detection.keypoints || []).filter(point =>
+                    Number.isFinite(point?.x) && Number.isFinite(point?.y)
+                );
+                const box = detection.boundingBox;
+                const x = keypoints.length >= 2
+                    ? keypoints.reduce((sum, point) => sum + point.x, 0) / keypoints.length
+                    : box ? (box.originX + box.width / 2) / width : NaN;
+                const y = keypoints.length >= 2
+                    ? keypoints.reduce((sum, point) => sum + point.y, 0) / keypoints.length
+                    : box ? (box.originY + box.height / 2) / height : NaN;
+                if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+                return {
+                    x: clampVA(x),
+                    y: clampVA(y),
+                    size: clampVA(box ? Math.max(box.width / width, box.height / height) : 0.08, 0.035, 0.30),
+                    confidence: detection.categories?.[0]?.score ?? 0.6,
+                    source: 'face'
+                };
+            }).filter(Boolean);
+        }
+
+        function getPoseHeadCandidates(landmarksList) {
+            const headIndexes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+            return (landmarksList || []).map(landmarks => {
+                const headPoints = headIndexes
+                    .map(index => landmarks[index])
+                    .filter(point => point && (point.visibility ?? 1) > 0.35 && (point.presence ?? 1) > 0.35);
+                if (headPoints.length < 2) return null;
+                const x = headPoints.reduce((sum, point) => sum + point.x, 0) / headPoints.length;
+                const y = headPoints.reduce((sum, point) => sum + point.y, 0) / headPoints.length;
+                const shoulders = [landmarks[11], landmarks[12]].filter(point =>
+                    point && (point.visibility ?? 1) > 0.30 && (point.presence ?? 1) > 0.30
+                );
+                const shoulderWidth = shoulders.length === 2
+                    ? Math.abs(shoulders[0].x - shoulders[1].x)
+                    : 0.12;
+                return {
+                    x: clampVA(x),
+                    y: clampVA(y),
+                    size: clampVA(shoulderWidth * 0.55, 0.04, 0.24),
+                    confidence: headPoints.reduce((sum, point) => sum + (point.visibility ?? 0.6), 0) / headPoints.length,
+                    source: 'pose'
+                };
+            }).filter(Boolean);
+        }
+
+        function mergeVAHeadCandidates(faceHeads, poseHeads) {
+            const merged = [...faceHeads];
+            poseHeads.forEach(poseHead => {
+                const overlapsFace = faceHeads.some(faceHead => {
+                    const distance = Math.hypot(faceHead.x - poseHead.x, faceHead.y - poseHead.y);
+                    const threshold = Math.max(0.075, (faceHead.size + poseHead.size) * 0.48);
+                    return distance < threshold;
+                });
+                if (!overlapsFace) merged.push(poseHead);
+            });
+            return merged;
+        }
+
+        function updateVAHeadTracks(candidates, now) {
+            const detections = candidates.map(candidate => ({ ...candidate, x: 1 - candidate.x }));
+            const unmatchedTrackIds = new Set(vaHeadTracks.map(track => track.id));
+
+            detections
+                .sort((a, b) => b.confidence - a.confidence)
+                .forEach(detection => {
+                    let bestTrack = null;
+                    let bestDistance = Infinity;
+                    vaHeadTracks.forEach(track => {
+                        if (!unmatchedTrackIds.has(track.id)) return;
+                        const distance = Math.hypot(track.x - detection.x, (track.y - detection.y) * 0.85);
+                        const threshold = clampVA(
+                            Math.max(0.06, (track.size + detection.size) * 0.62),
+                            0.06,
+                            0.18
+                        );
+                        if (distance < threshold && distance < bestDistance) {
+                            bestTrack = track;
+                            bestDistance = distance;
+                        }
+                    });
+
+                    if (bestTrack) {
+                        const alpha = detection.source === 'face' ? 0.48 : 0.34;
+                        bestTrack.x = bestTrack.x * (1 - alpha) + detection.x * alpha;
+                        bestTrack.y = bestTrack.y * (1 - alpha) + detection.y * alpha;
+                        bestTrack.size = bestTrack.size * 0.65 + detection.size * 0.35;
+                        bestTrack.confidence = Math.max(bestTrack.confidence * 0.8, detection.confidence);
+                        bestTrack.hits = Math.min(bestTrack.hits + 1, 20);
+                        bestTrack.lastSeen = now;
+                        unmatchedTrackIds.delete(bestTrack.id);
+                    } else {
+                        vaHeadTracks.push({
+                            id: vaNextTrackId++,
+                            x: detection.x,
+                            y: detection.y,
+                            size: detection.size,
+                            confidence: detection.confidence,
+                            hits: 1,
+                            lastSeen: now
+                        });
+                    }
+                });
+
+            // คงตำแหน่งไว้ช่วงสั้น ๆ เพื่อลดอาการตัวเลขกระพริบเมื่อใบหน้าถูกบังชั่วขณะ
+            vaHeadTracks = vaHeadTracks.filter(track => now - track.lastSeen <= 650);
+            return vaHeadTracks.filter(track => track.hits >= 2);
+        }
+
+        function drawVAResults(headTracks) {
             const video = document.getElementById('vaVideo');
             const canvas = document.getElementById('vaCanvas');
             if (!video.videoWidth || !video.videoHeight) return;
@@ -1883,6 +2016,8 @@
             ctx.fillRect(0, 0, width / 2, height);
             ctx.fillStyle = 'rgba(168, 85, 247, 0.12)';
             ctx.fillRect(width / 2, 0, width / 2, height);
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.13)';
+            ctx.fillRect(width * VA_CENTER_MIN, 0, width * (VA_CENTER_MAX - VA_CENTER_MIN), height);
             ctx.strokeStyle = 'rgba(255,255,255,0.95)';
             ctx.lineWidth = Math.max(3, width / 320);
             ctx.setLineDash([16, 12]);
@@ -1894,47 +2029,59 @@
 
             let left = 0;
             let right = 0;
-            landmarksList.forEach((landmarks, index) => {
-                const visible = point => point && (point.visibility ?? 1) > 0.35;
-                const hips = [landmarks[23], landmarks[24]].filter(visible);
-                const shoulders = [landmarks[11], landmarks[12]].filter(visible);
-                const anchors = hips.length ? hips : shoulders;
-                if (!anchors.length) return;
+            let center = 0;
+            headTracks.forEach((track, index) => {
+                const side = track.x < VA_CENTER_MIN ? 'left' : track.x > VA_CENTER_MAX ? 'right' : 'center';
+                if (side === 'left') left++;
+                else if (side === 'right') right++;
+                else center++;
 
-                const sourceX = anchors.reduce((sum, point) => sum + point.x, 0) / anchors.length;
-                const sourceY = anchors.reduce((sum, point) => sum + point.y, 0) / anchors.length;
-                const mirroredX = 1 - sourceX;
-                const side = mirroredX < 0.5 ? 'left' : 'right';
-                if (side === 'left') left++; else right++;
-
-                const x = mirroredX * width;
-                const y = sourceY * height;
-                const color = side === 'left' ? '#22d3ee' : '#d946ef';
+                const x = track.x * width;
+                const y = track.y * height;
+                const color = side === 'left' ? '#22d3ee' : side === 'right' ? '#d946ef' : '#facc15';
+                const radius = clampVA(track.size * width * 0.42, Math.max(14, width / 70), Math.max(24, width / 24));
                 ctx.fillStyle = color;
                 ctx.strokeStyle = 'white';
                 ctx.lineWidth = 4;
                 ctx.beginPath();
-                ctx.arc(x, y, Math.max(13, width / 55), 0, Math.PI * 2);
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
                 ctx.fillStyle = '#020617';
-                ctx.font = `bold ${Math.max(13, width / 55)}px Kanit`;
+                ctx.font = `bold ${Math.max(13, Math.min(radius, width / 42))}px Kanit`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(String(index + 1), x, y + 1);
             });
-            setVACounts(left, right);
+            setVACounts(left, right, center);
         }
 
         function runVADetection(now = performance.now()) {
-            if (!vaStream || !vaPoseLandmarker) return;
+            if (!vaStream || (!vaFaceDetector && !vaPoseLandmarker)) return;
             const video = document.getElementById('vaVideo');
-            if (video.readyState >= 2 && video.currentTime !== vaLastVideoTime && now - vaLastDetectionAt >= 180) {
+            if (video.readyState >= 2 && video.currentTime !== vaLastVideoTime) {
                 vaLastVideoTime = video.currentTime;
-                vaLastDetectionAt = now;
                 try {
-                    const result = vaPoseLandmarker.detectForVideo(video, now);
-                    drawVAResults(result.landmarks || []);
+                    let hasNewResult = false;
+                    if (vaFaceDetector && now - vaLastFaceDetectionAt >= 150) {
+                        const faceResult = vaFaceDetector.detectForVideo(video, now);
+                        vaLatestFaceHeads = getFaceHeadCandidates(faceResult.detections || [], video);
+                        vaLastFaceDetectionAt = now;
+                        hasNewResult = true;
+                    }
+
+                    const poseInterval = vaFaceDetector ? 450 : 180;
+                    if (vaPoseLandmarker && now - vaLastPoseDetectionAt >= poseInterval) {
+                        const poseResult = vaPoseLandmarker.detectForVideo(video, now);
+                        vaLatestPoseHeads = getPoseHeadCandidates(poseResult.landmarks || []);
+                        vaLastPoseDetectionAt = now;
+                        hasNewResult = true;
+                    }
+
+                    if (hasNewResult) {
+                        const mergedHeads = mergeVAHeadCandidates(vaLatestFaceHeads, vaLatestPoseHeads);
+                        drawVAResults(updateVAHeadTracks(mergedHeads, now));
+                    }
                 } catch (error) {
                     console.warn('VA detection frame skipped', error);
                 }
@@ -1955,19 +2102,43 @@
                 video.srcObject = vaStream;
                 await video.play();
 
-                status.innerText = 'กำลังโหลดระบบตรวจจับบุคคล…';
+                status.innerText = 'กำลังโหลดระบบตรวจจับใบหน้าและศีรษะ…';
                 const visionTasks = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs');
                 const vision = await visionTasks.FilesetResolver.forVisionTasks(
                     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm'
                 );
+
+                const faceOptions = {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/latest/blaze_face_full_range_sparse.tflite'
+                    },
+                    runningMode: 'VIDEO',
+                    minDetectionConfidence: 0.45,
+                    minSuppressionThreshold: 0.25
+                };
+                try {
+                    vaFaceDetector = await visionTasks.FaceDetector.createFromOptions(vision, {
+                        ...faceOptions,
+                        baseOptions: { ...faceOptions.baseOptions, delegate: 'GPU' }
+                    });
+                } catch (faceGpuError) {
+                    console.warn('Face GPU mode unavailable; falling back to CPU', faceGpuError);
+                    try {
+                        vaFaceDetector = await visionTasks.FaceDetector.createFromOptions(vision, faceOptions);
+                    } catch (faceError) {
+                        console.warn('Face detector unavailable; using head landmarks only', faceError);
+                        vaFaceDetector = null;
+                    }
+                }
+
                 const poseOptions = {
                     baseOptions: {
                         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'
                     },
                     runningMode: 'VIDEO',
-                    numPoses: 12,
-                    minPoseDetectionConfidence: 0.35,
-                    minPosePresenceConfidence: 0.35,
+                    numPoses: 16,
+                    minPoseDetectionConfidence: 0.32,
+                    minPosePresenceConfidence: 0.32,
                     minTrackingConfidence: 0.35
                 };
                 try {
@@ -1977,9 +2148,17 @@
                     });
                 } catch (gpuError) {
                     console.warn('GPU mode unavailable; falling back to CPU', gpuError);
-                    vaPoseLandmarker = await visionTasks.PoseLandmarker.createFromOptions(vision, poseOptions);
+                    try {
+                        vaPoseLandmarker = await visionTasks.PoseLandmarker.createFromOptions(vision, poseOptions);
+                    } catch (poseError) {
+                        console.warn('Pose detector unavailable; using face detection only', poseError);
+                        vaPoseLandmarker = null;
+                    }
                 }
-                status.innerText = 'พร้อมแล้ว — ยืนฝั่งซ้ายหรือขวา';
+                if (!vaFaceDetector && !vaPoseLandmarker) throw new Error('ไม่สามารถโหลดตัวตรวจจับได้');
+                status.innerText = vaFaceDetector
+                    ? 'พร้อมแล้ว — หันหน้าเข้ากล้องและยืนให้พ้นแถบกลาง'
+                    : 'พร้อมแบบสำรอง — ให้เห็นศีรษะและช่วงไหล่ชัดเจน';
                 vaAnimationFrame = requestAnimationFrame(runVADetection);
                 return true;
             } catch (error) {
@@ -1993,7 +2172,7 @@
                 } else if (error?.name === 'NotReadableError' || error?.name === 'TrackStartError') {
                     message = 'กล้องกำลังถูกใช้งานโดยโปรแกรมอื่น กรุณาปิด Zoom, Meet หรือโปรแกรมกล้องอื่น แล้วลองใหม่';
                 } else {
-                    message = 'กล้องเปิดได้ แต่ระบบตรวจจับบุคคลโหลดไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต รีเฟรชหน้าเว็บ และลองใหม่';
+                    message = 'กล้องเปิดได้ แต่ระบบตรวจจับใบหน้าและศีรษะโหลดไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต รีเฟรชหน้าเว็บ และลองใหม่';
                 }
                 sysAlert(message);
                 return false;
@@ -2005,13 +2184,22 @@
             vaAnimationFrame = null;
             if (vaStream) vaStream.getTracks().forEach(track => track.stop());
             vaStream = null;
+            if (vaFaceDetector?.close) vaFaceDetector.close();
+            vaFaceDetector = null;
             if (vaPoseLandmarker?.close) vaPoseLandmarker.close();
             vaPoseLandmarker = null;
             vaLastVideoTime = -1;
-            vaLastDetectionAt = 0;
+            vaLastFaceDetectionAt = 0;
+            vaLastPoseDetectionAt = 0;
+            vaLatestFaceHeads = [];
+            vaLatestPoseHeads = [];
+            vaHeadTracks = [];
+            vaNextTrackId = 1;
             const video = document.getElementById('vaVideo');
             if (video) video.srcObject = null;
-            setVACounts(0, 0);
+            const canvas = document.getElementById('vaCanvas');
+            if (canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+            setVACounts(0, 0, 0);
         }
 
         function sysAlert(msg) {
@@ -2130,30 +2318,47 @@
             return false;
         }
 
-        function buildAdaptiveQuestionOrder(questions) {
-            const uniqueQuestions = getUniqueQuestions(questions).map(question => ({ ...question }));
-            const easyQuestions = shuffleArray(uniqueQuestions.filter(question => getQuestionDifficulty(question) === 'easy'));
-            const openingQuestions = easyQuestions.slice(0, Math.min(5, easyQuestions.length));
-            const openingSet = new Set(openingQuestions);
-            const remainingQuestions = uniqueQuestions.filter(question => !openingSet.has(question));
+        function getQuestionRoundPriority(question) {
+            const difficulty = getQuestionDifficulty(question);
+            const leftLength = [...String(question.leftChoice || '')].length;
+            const rightLength = [...String(question.rightChoice || '')].length;
+            const lengthPenalty = Math.abs(leftLength - rightLength);
+            const obviousWords = /ทุกครั้ง|เสมอ|ทั้งหมด|เท่านั้น|ไม่ต้อง|แน่นอน|ทันที/;
+            const obviousPenalty = obviousWords.test(`${question.leftChoice} ${question.rightChoice}`) ? 18 : 0;
+            const analyticBonus = question.bundleQuestionId && difficulty !== 'easy' ? 100 : 0;
+            const thinkingBonus = /ถ้า|ควร|เพราะ|เหตุใด|อย่างไร|สังเกต|ทดลอง|เปรียบเทียบ|พบว่า/.test(question.question || '') ? 12 : 0;
+            return analyticBonus + thinkingBonus - lengthPenalty - obviousPenalty;
+        }
 
-            // สุ่มซ้ำเฉพาะ "ลำดับ" จนได้การคละระดับที่ไม่เรียงเป็นแพตเทิร์นยาว
-            for (let attempt = 0; attempt < 400; attempt++) {
-                const candidate = shuffleArray(remainingQuestions);
-                if (candidate.length && getQuestionDifficulty(candidate[0]) === 'easy') continue;
-                if (!hasDifficultyRun(candidate, 2)) return [...openingQuestions, ...candidate];
+        function selectDifficultyBucket(questions, count, shouldShuffle) {
+            const ranked = questions.map((question, sourceIndex) => ({
+                question,
+                sourceIndex,
+                priority: getQuestionRoundPriority(question),
+                randomOrder: shouldShuffle ? Math.random() : 0
+            }));
+            ranked.sort((a, b) =>
+                b.priority - a.priority ||
+                a.randomOrder - b.randomOrder ||
+                a.sourceIndex - b.sourceIndex
+            );
+            return ranked.slice(0, count).map(item => item.question);
+        }
+
+        function mixDifficultyQuestions(questions) {
+            for (let attempt = 0; attempt < 500; attempt++) {
+                const candidate = shuffleArray(questions);
+                if (!hasDifficultyRun(candidate, 2)) return candidate;
             }
 
-            // ทางสำรองแบบถ่วงน้ำหนัก หากชุดคำถามมีสัดส่วนระดับที่ต่างจากชุดมาตรฐานมาก
             const buckets = {
-                easy: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'easy')),
-                medium: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'medium')),
-                hard: shuffleArray(remainingQuestions.filter(question => getQuestionDifficulty(question) === 'hard'))
+                easy: shuffleArray(questions.filter(question => getQuestionDifficulty(question) === 'easy')),
+                medium: shuffleArray(questions.filter(question => getQuestionDifficulty(question) === 'medium')),
+                hard: shuffleArray(questions.filter(question => getQuestionDifficulty(question) === 'hard'))
             };
-            const mixedQuestions = [];
-            let lastDifficulty = 'easy';
-            let runLength = openingQuestions.length;
-
+            const mixed = [];
+            let lastDifficulty = null;
+            let runLength = 0;
             while (Object.values(buckets).some(bucket => bucket.length)) {
                 let available = Object.keys(buckets).filter(difficulty => buckets[difficulty].length);
                 if (runLength >= 2 && available.length > 1) {
@@ -2161,15 +2366,51 @@
                 }
                 available.sort((a, b) => buckets[b].length - buckets[a].length || Math.random() - 0.5);
                 const chosenDifficulty = available[0];
-                mixedQuestions.push(buckets[chosenDifficulty].pop());
+                mixed.push(buckets[chosenDifficulty].pop());
                 if (chosenDifficulty === lastDifficulty) runLength++;
                 else {
                     lastDifficulty = chosenDifficulty;
                     runLength = 1;
                 }
             }
+            return mixed;
+        }
 
-            return [...openingQuestions, ...mixedQuestions];
+        function buildAdaptiveQuestionOrder(questions, shouldShuffle = true) {
+            const uniqueQuestions = getUniqueQuestions(questions).map(question => ({ ...question }));
+            const roundLength = Math.min(50, uniqueQuestions.length);
+            const targets = {
+                easy: Math.floor(roundLength * 0.30),
+                medium: Math.floor(roundLength * 0.30)
+            };
+            targets.hard = roundLength - targets.easy - targets.medium;
+
+            const buckets = {
+                easy: uniqueQuestions.filter(question => getQuestionDifficulty(question) === 'easy'),
+                medium: uniqueQuestions.filter(question => getQuestionDifficulty(question) === 'medium'),
+                hard: uniqueQuestions.filter(question => getQuestionDifficulty(question) === 'hard')
+            };
+            const selected = [];
+            Object.keys(targets).forEach(difficulty => {
+                selected.push(...selectDifficultyBucket(
+                    buckets[difficulty],
+                    Math.min(targets[difficulty], buckets[difficulty].length),
+                    shouldShuffle
+                ));
+            });
+
+            // หากชุดที่ผู้ดูแลแก้ไขมีข้อระดับใดไม่พอ ให้เติมจากข้อที่เหลือโดยไม่ทำซ้ำ
+            if (selected.length < roundLength) {
+                const selectedSet = new Set(selected);
+                const remaining = uniqueQuestions.filter(question => !selectedSet.has(question));
+                selected.push(...selectDifficultyBucket(remaining, roundLength - selected.length, shouldShuffle));
+            }
+
+            if (!shouldShuffle) {
+                const selectedSet = new Set(selected);
+                return uniqueQuestions.filter(question => selectedSet.has(question));
+            }
+            return mixDifficultyQuestions(selected);
         }
 
         function hasPredictableSidePattern(sequence) {
@@ -2253,6 +2494,7 @@
             document.getElementById('vaCameraPanel').classList.add('hidden');
             document.getElementById('leftZoneCount').classList.add('hidden');
             document.getElementById('rightZoneCount').classList.add('hidden');
+            document.getElementById('vaCenterCount').classList.add('hidden');
             document.getElementById('endScreen').classList.add('hidden');
             document.getElementById('pauseOverlay').classList.add('hidden');
             document.getElementById('resultOverlay').classList.add('hidden');
@@ -2283,18 +2525,21 @@
             const vaPanel = document.getElementById('vaCameraPanel');
             const leftCountBadge = document.getElementById('leftZoneCount');
             const rightCountBadge = document.getElementById('rightZoneCount');
+            const centerCountBadge = document.getElementById('vaCenterCount');
 
             if (playMode === 'va') {
                 vaPanel.classList.remove('hidden');
                 gameBoard.classList.add('va-mode');
                 leftCountBadge.classList.remove('hidden');
                 rightCountBadge.classList.remove('hidden');
+                centerCountBadge.classList.remove('hidden');
                 const cameraReady = await startVACamera();
                 if (!cameraReady) {
                     vaPanel.classList.add('hidden');
                     gameBoard.classList.remove('va-mode');
                     leftCountBadge.classList.add('hidden');
                     rightCountBadge.classList.add('hidden');
+                    centerCountBadge.classList.add('hidden');
                     return;
                 }
             } else {
@@ -2303,21 +2548,27 @@
                 gameBoard.classList.remove('va-mode');
                 leftCountBadge.classList.add('hidden');
                 rightCountBadge.classList.add('hidden');
+                centerCountBadge.classList.add('hidden');
             }
 
-            // Smart shuffle: 5 ข้อง่ายก่อน จากนั้นคละระดับโดยไม่ซ้ำข้อ
+            // สร้างรอบ 50 ข้อ: ง่าย 30% ปานกลาง 30% ยาก 40% และไม่ซ้ำข้อ
             const isShuffle = document.getElementById('shuffleCheckbox').checked;
             const uniqueQuestions = getUniqueQuestions(selectedSet.questions).map(question => ({ ...question }));
-            activeQuestions = isShuffle ? buildAdaptiveQuestionOrder(uniqueQuestions) : uniqueQuestions;
+            activeQuestions = buildAdaptiveQuestionOrder(uniqueQuestions, isShuffle);
 
             // สุ่มตำแหน่งคำตอบใหม่ทุกเกม เพื่อไม่ให้เกิดแพตเทิร์นซ้าย-ขวาที่คาดเดาได้
             activeQuestions = randomizeAnswerSides(activeQuestions);
 
             currentQuestionIndex = 0;
             score = 0;
+            vaTotalAnswers = 0;
+            document.getElementById('scoreLabel').innerText = playMode === 'va' ? 'ตอบถูกสะสม:' : 'คะแนน:';
+            document.getElementById('finalScoreLabel').innerText = playMode === 'va'
+                ? 'จำนวนคำตอบถูกรวมของผู้เล่น'
+                : 'ความแม่นยำของคุณ';
             document.getElementById('scoreDisplay').innerText = score;
             document.getElementById('totalQuestions').innerText = activeQuestions.length;
-            document.getElementById('finalTotal').innerText = activeQuestions.length;
+            document.getElementById('finalTotal').innerText = playMode === 'va' ? 0 : activeQuestions.length;
 
             document.getElementById('startScreen').classList.add('hidden');
             document.getElementById('gameBoard').classList.remove('hidden');
@@ -2394,7 +2645,7 @@
             isPaused = false; 
             timeLeft = questionTimeLimit;
             currentTrackedSide = null;
-            if (playMode === 'va') setVACounts(vaCounts.left, vaCounts.right);
+            if (playMode === 'va') setVACounts(vaCounts.left, vaCounts.right, vaCounts.center || 0);
             
             // ยืนยันการเคลียร์สถานะ Pause UI ตอนเริ่มข้อใหม่
             const elPauseBtn = document.getElementById('pauseBtn');
@@ -2456,13 +2707,13 @@
             isGameActive = false; // บล็อกการกดเปลี่ยนคำตอบหรือปุ่มหยุดระหว่างเฉลย
             document.getElementById('timerContainer').classList.remove('timer-warning');
             const q = activeQuestions[currentQuestionIndex];
-            const finalAnswer = currentTrackedSide; 
+            const finalAnswer = playMode === 'va' ? null : currentTrackedSide;
             const isCorrect = finalAnswer === q.correctSide;
             const finalCounts = { ...vaCounts };
             const correctStudentCount = playMode === 'va' ? finalCounts[q.correctSide] : 0;
-            const vaSummary = playMode === 'va'
-                ? `<span class="text-2xl text-white block mt-4">ซ้าย ${finalCounts.left} คน • ขวา ${finalCounts.right} คน<br><span class="text-emerald-300">ตอบถูก ${correctStudentCount} คน</span></span>`
-                : '';
+            const wrongSide = q.correctSide === 'left' ? 'right' : 'left';
+            const wrongStudentCount = playMode === 'va' ? finalCounts[wrongSide] : 0;
+            const undecidedStudentCount = playMode === 'va' ? (finalCounts.center || 0) : 0;
 
             const elLeftZone = document.getElementById('leftZone');
             const elRightZone = document.getElementById('rightZone');
@@ -2485,17 +2736,43 @@
                 elResultMessage.classList.remove('scale-0');
                 elResultMessage.classList.add('scale-100');
 
-                if (finalAnswer === null) {
+                if (playMode === 'va') {
+                    const answeredThisQuestion = finalCounts.left + finalCounts.right;
+                    vaTotalAnswers += answeredThisQuestion;
+                    score += correctStudentCount;
+                    document.getElementById('scoreDisplay').innerText = score;
+                    const correctSideText = q.correctSide === 'left' ? 'ฝั่งซ้าย' : 'ฝั่งขวา';
+                    const undecidedText = undecidedStudentCount
+                        ? ` • ยังไม่เลือก ${undecidedStudentCount} คน`
+                        : '';
+
+                    if ((finalCounts.total || 0) === 0) {
+                        playBeep(200, 'sawtooth', 0.5);
+                        elResultMessage.innerHTML = `<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">ไม่พบผู้เล่น</span><br><span class="text-2xl text-white block mt-4">กรุณาหันหน้าเข้ากล้องและยืนฝั่งคำตอบ</span>`;
+                    } else {
+                        if (correctStudentCount > 0) {
+                            playBeep(600, 'sine', 0.1);
+                            setTimeout(() => playBeep(800, 'sine', 0.2), 100);
+                        } else {
+                            playBeep(300, 'square', 0.3);
+                        }
+                        elResultMessage.innerHTML = `
+                            <span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">คำตอบที่ถูก: ${correctSideText}</span>
+                            <span class="text-2xl text-white block mt-4">ซ้าย ${finalCounts.left} คน • ขวา ${finalCounts.right} คน${undecidedText}</span>
+                            <span class="text-3xl text-emerald-300 block mt-3">ตอบถูก ${correctStudentCount} คน • ตอบผิด ${wrongStudentCount} คน</span>
+                            <span class="text-xl text-yellow-300 block mt-2">+${correctStudentCount} คำตอบถูกสะสม</span>`;
+                    }
+                } else if (finalAnswer === null) {
                     playBeep(200, 'sawtooth', 0.5);
-                    elResultMessage.innerHTML = `<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">หมดเวลา!<br><span class="text-3xl text-white">${playMode === 'va' && finalCounts.left === finalCounts.right ? 'จำนวนคนสองฝั่งเท่ากัน' : 'ไม่ได้เลือกคำตอบ'}</span></span>${vaSummary}`;
+                    elResultMessage.innerHTML = `<span class="text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)]">หมดเวลา!<br><span class="text-3xl text-white">ไม่ได้เลือกคำตอบ</span></span>`;
                 } else if (isCorrect) {
                     score++;
                     document.getElementById('scoreDisplay').innerText = score;
                     playBeep(600, 'sine', 0.1); setTimeout(() => playBeep(800, 'sine', 0.2), 100);
-                    elResultMessage.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">ถูกต้อง!</span><br><span class="text-3xl text-white block mt-4">+1 คะแนน</span>${vaSummary}`;
+                    elResultMessage.innerHTML = `<span class="text-green-400 drop-shadow-[0_0_30px_rgba(34,197,94,0.8)]">ถูกต้อง!</span><br><span class="text-3xl text-white block mt-4">+1 คะแนน</span>`;
                 } else {
                     playBeep(300, 'square', 0.3);
-                    elResultMessage.innerHTML = `<span class="text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]">ผิด!</span>${vaSummary}`;
+                    elResultMessage.innerHTML = `<span class="text-red-500 drop-shadow-[0_0_30px_rgba(239,68,68,0.8)]">ผิด!</span>`;
                 }
 
                 window.timeUpTimeout2 = setTimeout(() => {
@@ -2511,9 +2788,12 @@
                             document.getElementById('gameBoard').classList.add('hidden');
                             document.getElementById('endScreen').classList.remove('hidden');
                             document.getElementById('finalScore').innerText = score;
-                            const percent = score / activeQuestions.length;
+                            const finalTotal = playMode === 'va' ? vaTotalAnswers : activeQuestions.length;
+                            document.getElementById('finalTotal').innerText = finalTotal;
+                            const percent = finalTotal > 0 ? score / finalTotal : 0;
                             const feedbackEl = document.getElementById('feedbackText');
-                            if (percent >= 0.8) feedbackEl.innerHTML = "ยอดเยี่ยม! ระดับปรมาจารย์ <i class='fa-solid fa-crown text-yellow-400'></i>";
+                            if (playMode === 'va' && finalTotal === 0) feedbackEl.innerText = 'ยังไม่มีผู้เล่นถูกนับ กรุณาจัดตำแหน่งกล้องแล้วลองใหม่';
+                            else if (percent >= 0.8) feedbackEl.innerHTML = "ยอดเยี่ยม! ระดับปรมาจารย์ <i class='fa-solid fa-crown text-yellow-400'></i>";
                             else if (percent >= 0.5) feedbackEl.innerText = "เก่งมาก! ทำได้ดีทีเดียว";
                             else feedbackEl.innerText = "พยายามได้ดี! ลองเล่นอีกครั้งนะ";
                         }
