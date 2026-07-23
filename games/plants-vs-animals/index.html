@@ -253,7 +253,7 @@
         }
         
         #hand-cursor.grabbing::after {
-            content: "✊";
+            content: "🤏";
         }
         
         #ar-loading {
@@ -297,7 +297,7 @@
         <div class="flex gap-4 items-center">
             <!-- AR Toggle Button -->
             <button id="ar-toggle-btn" class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-4 py-2 rounded-full font-bold border-2 border-purple-300 transition-colors flex items-center gap-2 shadow-sm">
-                <i class="fa-solid fa-camera"></i> <span class="hidden md:inline">เปิด AR (ใช้มือจับ)</span>
+                <i class="fa-solid fa-camera"></i> <span class="hidden md:inline">เปิด AR (จีบนิ้วจับ)</span>
             </button>
             
             <div class="bg-blue-100 px-4 py-2 rounded-full font-bold text-blue-800 flex items-center gap-2 border-2 border-blue-300">
@@ -315,7 +315,10 @@
         
         <!-- Instruction -->
         <div class="text-center bg-white p-3 rounded-xl shadow-sm border border-gray-200">
-            <p class="text-lg font-semibold text-gray-700">ลากรูปภาพไปใส่ในกล่องให้ถูกต้อง!</p>
+            <p class="text-lg font-semibold text-gray-700">
+                ลากรูปภาพไปใส่ในกล่องให้ถูกต้อง!
+                <span class="block text-sm text-purple-700 mt-1">โหมด AR: จีบนิ้วโป้งกับนิ้วชี้เพื่อจับและลาก</span>
+            </p>
         </div>
 
         <!-- Item Pool (Where items spawn) -->
@@ -438,7 +441,7 @@
         let arHands = null;
         let arCamera = null;
         let arGrabbedItem = null;
-        let isHandGrabbing = false;
+        let isHandPinching = false;
         let cursorX = 0, cursorY = 0;
 
         // Shuffle array
@@ -662,6 +665,8 @@
             element.style.left = 'auto';
             element.style.top = 'auto';
             element.style.opacity = '1';
+            element.style.pointerEvents = 'auto';
+            element.style.willChange = 'auto';
             element.classList.remove('is-dragging');
             element.style.zIndex = '10'; // Reset z-index
             
@@ -842,7 +847,7 @@
         }
 
         function stopAR() {
-            arToggleBtn.innerHTML = '<i class="fa-solid fa-camera"></i> <span class="hidden md:inline">เปิด AR (ใช้มือจับ)</span>';
+            arToggleBtn.innerHTML = '<i class="fa-solid fa-camera"></i> <span class="hidden md:inline">เปิด AR (จีบนิ้วจับ)</span>';
             arToggleBtn.classList.replace('bg-red-500', 'bg-purple-100');
             arToggleBtn.classList.replace('text-white', 'text-purple-800');
             arToggleBtn.classList.replace('border-red-600', 'border-purple-300');
@@ -850,19 +855,13 @@
             arContainer.style.display = 'none';
             document.body.classList.remove('ar-active');
             handCursor.style.display = 'none';
+            handCursor.classList.remove('grabbing');
             
             if (arCamera) {
                 arCamera.stop();
             }
-            if (arGrabbedItem) {
-                // Drop item back if AR is closed while holding
-                arGrabbedItem.style.position = 'relative';
-                arGrabbedItem.style.left = 'auto';
-                arGrabbedItem.style.top = 'auto';
-                arGrabbedItem.classList.remove('is-dragging');
-                itemPool.appendChild(arGrabbedItem);
-                arGrabbedItem = null;
-            }
+            isHandPinching = false;
+            returnARItemToPool();
         }
 
         function initMediaPipe() {
@@ -895,40 +894,60 @@
             });
         }
 
-        function checkFistGesture(landmarks) {
-            // อัลกอริทึมตรวจสอบการ "กำมือ" 5 นิ้ว (Fist/Grab)
-            // เช็คว่าปลายนิ้วงอเข้าหาข้อมือมากกว่าโคนนิ้วหรือไม่
-            let curledFingers = 0;
-            const fingers = [
-                {tip: 8, mcp: 5},   // นิ้วชี้
-                {tip: 12, mcp: 9},  // นิ้วกลาง
-                {tip: 16, mcp: 13}, // นิ้วนาง
-                {tip: 20, mcp: 17}  // นิ้วก้อย
-            ];
-            
-            const wrist = landmarks[0];
-            
-            fingers.forEach(f => {
-                const tip = landmarks[f.tip];
-                const mcp = landmarks[f.mcp];
-                
-                // คำนวณระยะห่าง 2D (Pythagoras)
-                const distTip = Math.hypot(tip.x - wrist.x, tip.y - wrist.y);
-                const distMcp = Math.hypot(mcp.x - wrist.x, mcp.y - wrist.y);
-                
-                // ถ้าระยะปลายนิ้วใกล้ข้อมือมากกว่าโคนนิ้ว แสดงว่านิ้วนั้นกำลัง "งอ"
-                if (distTip < distMcp) {
-                    curledFingers++;
-                }
-            });
-            
-            // เช็คนิ้วโป้งแยกต่างหาก (เช็คความใกล้กับนิ้วชี้เผื่อกำไม่มิด)
+        function checkPinchGesture(landmarks, wasPinching) {
+            // วัดระยะปลายนิ้วโป้งกับนิ้วชี้เทียบกับความกว้างฝ่ามือ
+            // ทำให้ระยะจีบทำงานสม่ำเสมอแม้มืออยู่ใกล้หรือไกลกล้อง
             const thumbTip = landmarks[4];
             const indexTip = landmarks[8];
             const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
-            
-            // ถ้าเด็กงอนิ้วอย่างน้อย 3-4 นิ้ว (กำมือ) หรือจับแบบจีบนิ้วโป้งกับนิ้วชี้แน่นๆ ถือว่ากำลัง Grab
-            return curledFingers >= 3 || pinchDist < 0.05;
+            const indexBase = landmarks[5];
+            const pinkyBase = landmarks[17];
+            const palmWidth = Math.max(
+                Math.hypot(indexBase.x - pinkyBase.x, indexBase.y - pinkyBase.y),
+                0.001
+            );
+            const pinchRatio = pinchDist / palmWidth;
+
+            // ใช้สองเกณฑ์เพื่อไม่ให้จับ-ปล่อยสั่นไปมาเมื่อระยะนิ้วอยู่ใกล้เส้นแบ่ง
+            return pinchRatio < (wasPinching ? 0.45 : 0.32);
+        }
+
+        function mapVideoPointToScreen(point) {
+            // ชดเชยภาพกล้องที่ใช้ object-fit: cover และถูก mirror
+            // เพื่อให้พิกัดจุดจีบตรงกับภาพที่เห็นจริงบนหน้าจอทุกอัตราส่วน
+            const sourceWidth = videoElement.videoWidth || 640;
+            const sourceHeight = videoElement.videoHeight || 480;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const scale = Math.max(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
+            const renderedWidth = sourceWidth * scale;
+            const renderedHeight = sourceHeight * scale;
+            const offsetX = (viewportWidth - renderedWidth) / 2;
+            const offsetY = (viewportHeight - renderedHeight) / 2;
+
+            return {
+                x: offsetX + (1 - point.x) * renderedWidth,
+                y: offsetY + point.y * renderedHeight
+            };
+        }
+
+        function positionARItem(item, x, y) {
+            item.style.left = `${x - item.offsetWidth / 2}px`;
+            item.style.top = `${y - item.offsetHeight / 2}px`;
+        }
+
+        function returnARItemToPool() {
+            if (!arGrabbedItem) return;
+
+            arGrabbedItem.style.position = 'relative';
+            arGrabbedItem.style.left = 'auto';
+            arGrabbedItem.style.top = 'auto';
+            arGrabbedItem.style.zIndex = '10';
+            arGrabbedItem.style.pointerEvents = 'auto';
+            arGrabbedItem.style.willChange = 'auto';
+            arGrabbedItem.classList.remove('is-dragging');
+            itemPool.appendChild(arGrabbedItem);
+            arGrabbedItem = null;
         }
 
         function getElementAtPosition(x, y, className) {
@@ -954,25 +973,29 @@
                 // วาดเส้นโครงกระดูกมือบนหน้าจอ (สีเขียวบางๆ ให้เด็กเห็นว่ากล้องจับมือได้)
                 drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: 'rgba(0, 255, 0, 0.2)', lineWidth: 3});
                 
-                // ใช้จุดศูนย์กลางของมือ (จุดที่ 9 ตรงโคนนิ้วกลาง) เป็นตำแหน่ง Cursor
-                const centerPoint = landmarks[9];
-                
-                // แปลงพิกัดจากกล้องมาเป็นหน้าจอ (ทำการสลับซ้ายขวาเพราะกล้องถูก Mirror ไว้)
-                cursorX = (1 - centerPoint.x) * window.innerWidth;
-                cursorY = centerPoint.y * window.innerHeight;
+                // ใช้กึ่งกลางระหว่างปลายนิ้วโป้งกับนิ้วชี้เป็นตำแหน่งจับจริง
+                const thumbTip = landmarks[4];
+                const indexTip = landmarks[8];
+                const pinchPoint = {
+                    x: (thumbTip.x + indexTip.x) / 2,
+                    y: (thumbTip.y + indexTip.y) / 2
+                };
+                const screenPoint = mapVideoPointToScreen(pinchPoint);
+                cursorX = screenPoint.x;
+                cursorY = screenPoint.y;
                 
                 // อัปเดตตำแหน่งไอคอนมือ (Cursor) บนหน้าจอ
                 handCursor.style.left = `${cursorX}px`;
                 handCursor.style.top = `${cursorY}px`;
                 
-                const isGrabbingNow = checkFistGesture(landmarks);
+                const isPinchingNow = checkPinchGesture(landmarks, isHandPinching);
                 
-                if (isGrabbingNow) {
+                if (isPinchingNow) {
                     handCursor.classList.add('grabbing');
                     
-                    if (!isHandGrabbing) {
-                        // เปลี่ยนสถานะเป็นเริ่มกำมือ
-                        isHandGrabbing = true;
+                    if (!isHandPinching) {
+                        // เริ่มจีบนิ้วโป้งกับนิ้วชี้
+                        isHandPinching = true;
                         
                         // ตรวจสอบว่ามืออยู่ตรงกับไอเทมไหนที่ยังไม่ได้ถูกหยิบ
                         if (!arGrabbedItem) {
@@ -980,19 +1003,22 @@
                             // หยิบได้เฉพาะของที่อยู่ในกล่องกลาง (item-pool)
                             if (item && item.parentElement.id === 'item-pool') {
                                 arGrabbedItem = item;
+                                // ย้ายออกจากกล่องที่มี backdrop-filter เพื่อให้ position: fixed
+                                // ใช้พิกัด viewport เดียวกับ cursor และไม่เกิดออฟเซ็ตซ้ำ
+                                document.body.appendChild(arGrabbedItem);
                                 arGrabbedItem.classList.add('is-dragging');
                                 arGrabbedItem.style.position = 'fixed';
                                 arGrabbedItem.style.zIndex = '1000';
+                                arGrabbedItem.style.pointerEvents = 'none';
+                                arGrabbedItem.style.willChange = 'left, top';
                                 
-                                // ขยับของให้ลอยตามมือ
-                                arGrabbedItem.style.left = `${cursorX - arGrabbedItem.offsetWidth/2}px`;
-                                arGrabbedItem.style.top = `${cursorY - arGrabbedItem.offsetHeight/2 + 30}px`; // +30 เพื่อให้ของอยู่ใต้ไอคอนมือเล็กน้อย
+                                // ให้จุดกึ่งกลางของรูปอยู่ตรงจุดจีบพอดี
+                                positionARItem(arGrabbedItem, cursorX, cursorY);
                             }
                         }
                     } else if (arGrabbedItem) {
-                        // กำลังลากของอยู่ ให้อัปเดตตำแหน่งของตามมือ
-                        arGrabbedItem.style.left = `${cursorX - arGrabbedItem.offsetWidth/2}px`;
-                        arGrabbedItem.style.top = `${cursorY - arGrabbedItem.offsetHeight/2 + 30}px`;
+                        // กำลังจีบลากของอยู่ ให้อัปเดตตำแหน่งตรงกับจุดจีบ
+                        positionARItem(arGrabbedItem, cursorX, cursorY);
                         
                         // ไฮไลต์กล่องที่มือลากผ่าน
                         dropZones.forEach(zone => {
@@ -1005,11 +1031,11 @@
                         });
                     }
                 } else {
-                    // แบมือออก (ปล่อย)
+                    // แยกนิ้วโป้งกับนิ้วชี้ออกเพื่อปล่อย
                     handCursor.classList.remove('grabbing');
                     
-                    if (isHandGrabbing) {
-                        isHandGrabbing = false;
+                    if (isHandPinching) {
+                        isHandPinching = false;
                         
                         if (arGrabbedItem) {
                             let dropped = false;
@@ -1027,11 +1053,7 @@
                             
                             // ถ้าปล่อยผิดที่ (ไม่ลงกล่อง) ให้เด้งกลับไปที่เดิม
                             if (!dropped) {
-                                arGrabbedItem.style.position = 'relative';
-                                arGrabbedItem.style.left = 'auto';
-                                arGrabbedItem.style.top = 'auto';
-                                arGrabbedItem.classList.remove('is-dragging');
-                                itemPool.appendChild(arGrabbedItem);
+                                returnARItemToPool();
                             }
                             
                             arGrabbedItem = null;
@@ -1041,15 +1063,8 @@
             } else {
                 // หากกล้องตรวจไม่พบมือ ให้ปล่อยของลง
                 handCursor.classList.remove('grabbing');
-                isHandGrabbing = false;
-                if (arGrabbedItem) {
-                    arGrabbedItem.style.position = 'relative';
-                    arGrabbedItem.style.left = 'auto';
-                    arGrabbedItem.style.top = 'auto';
-                    arGrabbedItem.classList.remove('is-dragging');
-                    itemPool.appendChild(arGrabbedItem);
-                    arGrabbedItem = null;
-                }
+                isHandPinching = false;
+                returnARItemToPool();
             }
             canvasCtx.restore();
         }
